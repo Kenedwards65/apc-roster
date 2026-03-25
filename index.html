@@ -1,0 +1,2328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>APC Roster Analyser</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+<style>
+/* ── Reset & Base ── */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0f1a;color:#e2e8f0;font-size:13px;min-height:100vh}
+
+/* ── Shell ── */
+#shell{max-width:1100px;margin:0 auto;padding:28px 20px}
+
+/* ── Header ── */
+.hdr{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+h1{font-size:20px;font-weight:700;color:#f8fafc}
+.hdr-sub{font-size:12px;color:#475569}
+.reload-btn{margin-left:auto;font-size:12px;color:#475569;cursor:pointer;border:none;background:none;padding:0}
+.reload-btn:hover{color:#94a3b8}
+
+/* ── Upload card ── */
+#upload-card{background:#111827;border-radius:14px;border:1px solid #1e293b;padding:36px;max-width:540px;margin-top:16px}
+#upload-card p{font-size:13px;color:#64748b;margin-bottom:20px;line-height:1.7}
+.file-label{display:inline-flex;align-items:center;gap:8px;padding:9px 18px;border-radius:9px;border:1px solid #334155;background:#1e293b;cursor:pointer;font-size:13px;font-weight:500;color:#e2e8f0;transition:background .15s}
+.file-label:hover{background:#263548;border-color:#3b82f6}
+#load-status{margin-top:14px;font-size:13px;color:#475569}
+#load-err{margin-top:10px;font-size:13px;color:#f87171}
+
+/* ── Wizard ── */
+#wizard{display:none}
+.steps{display:flex;gap:0;margin-bottom:28px;border-radius:10px;overflow:hidden;border:1px solid #1e293b}
+.step{flex:1;padding:10px 14px;background:#111827;font-size:12px;color:#475569;border-right:1px solid #1e293b;text-align:center}
+.step:last-child{border-right:none}
+.step.done{background:#0f2040;color:#3b82f6}
+.step.active{background:#1d4ed8;color:#fff;font-weight:600}
+.step-num{display:block;font-size:10px;opacity:.7;margin-bottom:2px}
+
+/* ── Cards ── */
+.card{background:#111827;border-radius:14px;border:1px solid #1e293b;padding:24px;margin-bottom:16px}
+.card-title{font-size:14px;font-weight:600;margin-bottom:16px;color:#f1f5f9}
+.card-subtitle{font-size:12px;color:#64748b;margin-top:-10px;margin-bottom:16px}
+
+/* ── Report type grid ── */
+.report-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.rt-btn{padding:16px;border-radius:10px;border:1.5px solid #1e293b;background:#0f172a;cursor:pointer;text-align:left;font-family:inherit;transition:all .15s}
+.rt-btn:hover{border-color:#3b82f6;background:#0f2040}
+.rt-btn.selected{border-color:#3b82f6;background:#0f2040}
+.rt-icon{font-size:20px;margin-bottom:6px;display:block}
+.rt-name{font-size:13px;font-weight:600;color:#f1f5f9;display:block;margin-bottom:3px}
+.rt-desc{font-size:11px;color:#64748b;line-height:1.5}
+
+/* ── Form elements ── */
+.form-row{display:flex;gap:16px;margin-bottom:14px}
+.form-group{display:flex;flex-direction:column;gap:6px;flex:1}
+.fl{font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.4px}
+select,input[type=date]{padding:8px 10px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:13px;font-family:inherit;outline:none}
+select:focus,input[type=date]:focus{border-color:#3b82f6}
+select[multiple]{min-height:120px}
+.step-note{font-size:11px;color:#475569;margin-top:8px;line-height:1.6}
+
+/* ── Buttons ── */
+.btn-row{display:flex;gap:10px;margin-top:16px;align-items:center}
+.btn-primary{padding:9px 22px;border-radius:9px;border:none;background:#3b82f6;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s}
+.btn-primary:hover{background:#2563eb}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-secondary{padding:8px 16px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#94a3b8;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit}
+.btn-secondary:hover{border-color:#3b82f6;color:#e2e8f0}
+.back-btn{padding:8px 14px;border-radius:8px;border:1px solid #334155;background:transparent;color:#94a3b8;font-size:12px;cursor:pointer;font-family:inherit}
+.back-btn:hover{border-color:#64748b;color:#e2e8f0}
+
+/* ── Radio pills ── */
+.radio-group{display:flex;flex-wrap:wrap;gap:6px}
+.radio-pill{padding:7px 14px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#94a3b8;font-size:12px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s}
+.radio-pill input{display:none}
+.radio-pill:hover{border-color:#3b82f6;color:#e2e8f0}
+.radio-pill.selected{background:#1d4ed8;border-color:#3b82f6;color:#fff}
+
+/* ── Results ── */
+#results{display:none}
+.results-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;gap:16px;flex-wrap:wrap}
+.results-title{font-size:16px;font-weight:700;color:#f1f5f9}
+.results-meta{font-size:12px;color:#64748b;margin-top:3px}
+.export-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.exp-btn{padding:8px 16px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#94a3b8;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit}
+.exp-btn:hover{border-color:#3b82f6;color:#e2e8f0}
+.primary-exp{background:#059669;border-color:#059669;color:#fff;display:flex;align-items:center;gap:6px}
+.primary-exp:hover{background:#047857;border-color:#047857;color:#fff}
+
+/* ── Metrics bar ── */
+.metrics{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.metric{background:#111827;border:1px solid #1e293b;border-radius:10px;padding:10px 16px;min-width:100px}
+.metric-label{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:3px}
+.metric-val{font-size:18px;font-weight:700;color:#f1f5f9}
+.metric.work .metric-val{color:#3b82f6}
+.metric.travel .metric-val{color:#f59e0b}
+.metric.total .metric-val{color:#10b981}
+
+/* ── Legend ── */
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;font-size:11px;color:#94a3b8}
+.ldot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:middle}
+
+/* ── Table ── */
+.tbl-wrap{overflow-x:auto;border-radius:10px;border:1px solid #1e293b}
+table{border-collapse:collapse;width:100%;font-size:12px}
+table.full-w{width:100%}
+th{background:#0f172a;color:#94a3b8;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;padding:8px 10px;border-bottom:1px solid #1e293b;border-right:1px solid #1e293b;white-space:nowrap;position:sticky;top:0}
+th:last-child{border-right:none}
+td{padding:6px 10px;border-bottom:1px solid #1e293b;border-right:1px solid #1e293b;color:#cbd5e1;vertical-align:middle}
+td:last-child{border-right:none}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#0f172a}
+.num{text-align:right}
+.muted{color:#475569}
+.bv{font-weight:600;color:#f1f5f9}
+.wv{color:#3b82f6}
+.tv{color:#f59e0b}
+.ov{color:#10b981}
+.wc{color:#60a5fa}
+.tc{color:#fbbf24}
+.oc{color:#34d399}
+.s-work{background:#0f2040;color:#60a5fa;font-weight:500}
+.s-travel{background:#1c1505;color:#fbbf24;font-weight:500}
+.s-rnr{background:#1a1a2e;color:#818cf8;font-weight:500}
+.s-sick{background:#1f0a0a;color:#f87171;font-weight:500}
+.s-leave{background:#12172b;color:#a78bfa;font-weight:500}
+.s-other{background:#0f1a14;color:#6ee7b7}
+.empty-row{text-align:center;padding:32px 14px;color:#475569;font-style:italic}
+
+/* ── Sign-on panel ── */
+#so_panel{display:none}
+#so_panel .cd{background:#111827;border:1px solid #1e293b;border-radius:12px;padding:24px;margin-bottom:16px}
+#so_panel .ct{font-size:15px;font-weight:600;margin-bottom:4px;color:#f1f5f9}
+#so_panel .cs{font-size:12px;color:#64748b;margin-bottom:14px}
+#so_panel .lb{font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px}
+#so_panel input[type=text]{width:100%;padding:8px 12px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:13px;font-family:inherit;margin-bottom:10px;outline:none}
+#so_panel input[type=text]:focus{border-color:#3b82f6}
+#so_panel .rg{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+#so_panel .rg button{background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit;transition:all .15s}
+#so_panel .rg button:hover{border-color:#3b82f6;color:#e2e8f0}
+#so_panel .rg button.a{background:#1d4ed8;border-color:#3b82f6;color:#fff}
+#so_panel .si{background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:10px 14px}
+#so_panel .sil{font-size:11px;color:#475569;margin-bottom:2px}
+#so_panel .siv{font-size:14px;font-weight:600;color:#f1f5f9}
+#so_panel .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+#so_panel .pb{background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:9px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;transition:all .15s}
+#so_panel .pb:hover{border-color:#3b82f6}
+#so_panel .pba{background:#0f2040;border-color:#3b82f6;color:#60a5fa}
+#so_panel .tag{background:#0f2040;border:1px solid #1e3a5f;border-radius:6px;padding:4px 10px;font-size:11px;color:#94a3b8;display:inline-block;margin:3px}
+#so_panel .tag span{opacity:.6}
+#so_panel .ok{background:#0a2010;border:1px solid #14532d;border-radius:12px;padding:24px;margin-bottom:16px;text-align:center}
+#so_panel .drop{border:2px dashed #334155;border-radius:12px;padding:40px 24px;text-align:center;cursor:pointer;background:#0f172a;display:block}
+#so_panel .drop:hover{border-color:#3b82f6}
+#so_panel .btn-so-primary{padding:10px 22px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;border:none;background:#3b82f6;color:#fff;font-family:inherit;transition:background .15s}
+#so_panel .btn-so-primary:hover{background:#2563eb}
+#so_panel .btn-so-primary:disabled{opacity:.5;cursor:wait}
+#so_panel .btn-so-sec{padding:9px 18px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;border:1px solid #334155;background:#1e293b;color:#94a3b8;font-family:inherit;transition:all .15s}
+#so_panel .btn-so-sec:hover{border-color:#3b82f6;color:#e2e8f0}
+#so_panel .btn-so-green{padding:12px 28px;border-radius:9px;border:none;background:#10b981;color:#fff;font-size:14px;font-weight:700;cursor:pointer;flex:1;font-family:inherit;transition:background .15s}
+#so_panel .btn-so-green:hover{background:#059669}
+#so_panel .btn-so-green:disabled{opacity:.5;cursor:wait}
+#so_panel .dl{display:inline-block;background:#10b981;color:#fff;padding:12px 28px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;margin:4px;cursor:pointer;border:none;font-family:inherit}
+#so_panel .dl:hover{background:#059669}
+#so_panel .fx{display:flex}
+#so_panel .g8{gap:8px}
+#so_panel .g12{gap:12px}
+#so_panel .mt8{margin-top:8px}
+#so_panel .f1{flex:1}
+#so_panel .fw{flex-wrap:wrap}
+#so_panel .err{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#f87171}
+</style>
+
+</head>
+<body>
+<div id="shell">
+  <div class="hdr">
+    <h1>APC Roster Analyser</h1>
+    <span class="hdr-sub">Australian Portable Camps</span>
+    <button class="reload-btn" id="reloadBtn" style="display:none" onclick="resetAll()">↩ Load new file</button>
+  </div>
+
+  <!-- UPLOAD -->
+  <div id="upload-card">
+    <p>Upload your APC Roster Master Excel file to begin. The analyser reads all Con Roster and Mnt Roster sheets automatically.</p>
+    <label class="file-label">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Select roster file (.xlsx)
+      <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
+    </label>
+    <div id="load-status"></div>
+    <div id="load-err"></div>
+  </div>
+
+  <!-- WIZARD -->
+  <div id="wizard">
+    <div class="steps" id="stepBar">
+      <div class="step active" id="s1"><span class="step-num">Step 1</span>Report type</div>
+      <div class="step" id="s2"><span class="step-num">Step 2</span>Project</div>
+      <div class="step" id="s3"><span class="step-num">Step 3</span>People / Trades</div>
+      <div class="step" id="s4"><span class="step-num">Step 4</span>Date range</div>
+      <div class="step" id="s5"><span class="step-num">Step 5</span>Output format</div>
+    </div>
+
+    <!-- Step 1: Report Type -->
+    <div id="step1" class="card">
+      <div class="card-title">What would you like to report on?</div>
+      <div class="report-grid">
+        <button class="rt-btn" onclick="selectRT('individual')">
+          <span class="rt-icon">👤</span>
+          <span class="rt-name">Individual Roster</span>
+          <span class="rt-desc">Day-by-day view for one person — every calendar day including RnR, leave and blank days</span>
+        </button>
+        <button class="rt-btn" onclick="selectRT('workforce')">
+          <span class="rt-icon">👥</span>
+          <span class="rt-name">Project Workforce</span>
+          <span class="rt-desc">All people on a project in a roster-style grid — people as rows, dates as columns</span>
+        </button>
+        <button class="rt-btn" onclick="selectRT('hours')">
+          <span class="rt-icon">⏱</span>
+          <span class="rt-name">Hours Summary</span>
+          <span class="rt-desc">Work hours and travel hours per person over a period — total or day-by-day</span>
+        </button>
+        <button class="rt-btn" onclick="selectRT('trade')">
+          <span class="rt-icon">🔧</span>
+          <span class="rt-name">Trade Report</span>
+          <span class="rt-desc">How many of each trade are rostered on a project — by day or period total</span>
+        </button>
+        <button class="rt-btn" onclick="selectRT('fatigue')">
+          <span class="rt-icon">⚠</span>
+          <span class="rt-name">Fatigue Report</span>
+          <span class="rt-desc">Identifies workers who have exceeded 14 consecutive days — work and travel days both count</span>
+        </button>
+        <button class="rt-btn" onclick="launchSignOn()" style="border-color:#10b981">
+          <span class="rt-icon">📋</span>
+          <span class="rt-name" style="color:#10b981">Sign-On Generator</span>
+          <span class="rt-desc">Generate printable daily sign-on sheets from the roster — PDF, Excel or Word</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2: Project -->
+    <div id="step2" class="card" style="display:none">
+      <div class="card-title" id="step2Title">Select project</div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="fl">Roster type</label>
+        <div class="radio-group">
+          <label class="radio-pill selected" id="pill-both" onclick="setRosterType('both',this)"><input type="radio" name="rosterType" value="both" checked> Both</label>
+          <label class="radio-pill" id="pill-con" onclick="setRosterType('con',this)"><input type="radio" name="rosterType" value="con"> Construction</label>
+          <label class="radio-pill" id="pill-mnt" onclick="setRosterType('mnt',this)"><input type="radio" name="rosterType" value="mnt"> Maintenance</label>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="fl" id="step2Label">Project</label>
+          <select id="projectSel" onchange="onProjectChange()">
+            <option value="">-- Select project --</option>
+          </select>
+          <!-- multi-select for individual report -->
+          <select id="projectMultiSel" multiple style="display:none;min-height:130px;min-width:260px" onchange="onProjectMultiChange()"></select>
+          <p class="step-note" style="margin-top:6px" id="projectMultiNote" style="display:none"></p>
+        </div>
+      </div>
+      <div class="btn-row" id="projectMultiBtns" style="display:none">
+        <button class="btn-secondary" onclick="selectAllProjects()">Select all</button>
+        <button class="btn-secondary" onclick="clearProjects()">Clear</button>
+      </div>
+      <p class="step-note" id="projectNote"></p>
+      <div class="btn-row">
+        <button class="back-btn" onclick="goStep(1)">← Back</button>
+        <button class="btn-primary" id="step2Next" onclick="goStep(3)" disabled>Next →</button>
+      </div>
+    </div>
+
+    <!-- Step 3: People / Trades -->
+    <div id="step3" class="card" style="display:none">
+      <div class="card-title" id="step3Title">Select people</div>
+      <div id="step3Content"></div>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="back-btn" onclick="goStep(2)">← Back</button>
+        <button class="btn-primary" id="step3Next" onclick="goStep(4)" disabled>Next →</button>
+      </div>
+    </div>
+
+    <!-- Step 4: Date Range -->
+    <div id="step4" class="card" style="display:none">
+      <div class="card-title">Select date range</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="fl">From</label>
+          <input type="date" id="dateFrom">
+        </div>
+        <div class="form-group">
+          <label class="fl">To</label>
+          <input type="date" id="dateTo">
+        </div>
+      </div>
+      <p class="step-note" id="dateNote"></p>
+      <div class="btn-row">
+        <button class="back-btn" onclick="goStep(3)">← Back</button>
+        <button class="btn-primary" onclick="goStep(5)">Next →</button>
+      </div>
+    </div>
+
+    <!-- Step 5: Output Format -->
+    <div id="step5" class="card" style="display:none">
+      <div class="card-title">Choose output format</div>
+      <div id="outputOptions"></div>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="back-btn" onclick="goStep(4)">← Back</button>
+        <button class="btn-primary" onclick="generateReport()">Generate report →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIGN-ON GENERATOR -->
+  <div id="so_panel" style="display:none">
+    <div id="so_ld" style="padding:40px;text-align:center;color:#94a3b8">Loading...</div>
+    <div id="so_app" style="display:none">
+      <div style="border-bottom:1px solid #1e293b;padding:16px 0;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <span style="font-size:16px;font-weight:700;color:#10b981">APC</span>
+          <span style="font-size:16px;font-weight:700;color:#f1f5f9"> Sign-On Generator</span>
+          <div style="font-size:12px;color:#475569;margin-top:2px">Roster loaded — generate printable daily sign-on sheets</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button id="so_soBtn" class="back-btn" style="display:none;border-color:#10b981;color:#10b981" onclick="SO_resetAll()">Start over</button>
+          <button class="back-btn" onclick="closeSignOn()">← Back</button>
+        </div>
+      </div>
+      <div class="steps" id="so_sBar"></div>
+      <div id="so_eBox" class="err" style="display:none;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#c0392b"></div>
+      <div id="so_cnt"></div>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results">
+    <div class="results-header">
+      <div>
+        <div class="results-title" id="resultsTitle"></div>
+        <div class="results-meta" id="resultsMeta"></div>
+      </div>
+      <div class="export-bar">
+        <button class="exp-btn primary-exp" onclick="exportExcel()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Download Excel
+        </button>
+        <button class="exp-btn" onclick="exportCSV()">CSV</button>
+        <button class="exp-btn" onclick="exportPDF()">PDF</button>
+        <button class="exp-btn" onclick="exportWord()">Word</button>
+        <button class="back-btn" onclick="backToWizard()">← Modify</button>
+        <button class="back-btn" onclick="newReport()" style="border-color:#2d7dd2;color:#2d7dd2;font-weight:500">&#43; New report</button>
+      </div>
+    </div>
+    <div class="metrics" id="metricsBar"></div>
+    <div class="legend" id="legendBar"></div>
+    <div class="tbl-wrap"><table id="reportTable"></table></div>
+    <p style="font-size:11px;color:#ccc;margin-top:10px">10.5 hrs/day · Work days = 1–50 · Travel = Fly/Drive In/Out variants · All exports include full column headers and metadata</p>
+  </div>
+</div>
+
+<script>
+// ── Constants ──────────────────────────────────────────────────────
+var HRS = 10.5;
+var TRAVEL_RE = /fly[\s\-]*(in|out)|dri[\s\-]*(in|out)|drive[\s\-]*(in|out)|dve[\s\-]*(in|out)|\btravel\b/i;
+var RNR_RE = /^(rnr|r&r|rr\d*|r'n'r)$/i;
+var LEAVE_RE = /^(a\/l|annual|compassionate|c\/l|maternity|paternity|parental|leave)/i;
+var SICK_RE = /^(sick|illness|medical|injury|fatigue|fatigue day)/i;
+var TRAINING_RE = /^(training|4wd training|s26|aveling|avelling|resit)/i;
+var AVAIL_RE = /^(avail|available|not available|dna|no show|cancelled|resigned)/i;
+
+function classifyDay(v) {
+  if (v == null) return { type: 'blank', label: '' };
+  var s = String(v).trim();
+  if (!s || s === '0' || s === '\xa0' || s === '???') return { type: 'blank', label: '' };
+  // Date strings appearing as sub-header cell values — treat as blank
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return { type: 'blank', label: '' };
+  // Travel checked first so composites like "10/Dri BS1" are caught
+  if (TRAVEL_RE.test(s)) return { type: 'travel', label: 'Travel' };
+  // Strict work day: whole number 1-50
+  if (/^\d+$/.test(s)) { var n = parseInt(s); if (n >= 1 && n <= 50) return { type: 'work', label: 'Day ' + n }; }
+  // Location and camp codes — person is on site working
+  if (/^(bs1|bs2|wpv|wr|billabong|brockman|mesa|camp\s*\d|convo\s*\d|conv\s*\d|singer|tarcutta|monarto|dinawan|kumarina|pyramid|argyle|winu|burnt.gully|whites.cliffs|santos|stage|singers|in\s*bs|go\s*to)$/i.test(s)) return { type: 'work', label: s };
+  // Supervisor/manager handover annotations in early date columns
+  if (/^(tom\s+[hw]|nick\s+m|dave\s+m|rohan|rohan\s+l|merry\s+xmas|xmas|n\/a|convo|conv)$/i.test(s)) return { type: 'other', label: s };
+  if (RNR_RE.test(s)) return { type: 'rnr', label: 'RnR' };
+  if (LEAVE_RE.test(s)) return { type: 'leave', label: 'Leave' };
+  if (SICK_RE.test(s)) return { type: 'sick', label: 'Sick' };
+  if (TRAINING_RE.test(s)) return { type: 'training', label: 'Training' };
+  if (AVAIL_RE.test(s)) return { type: 'available', label: 'Available' };
+  return { type: 'other', label: s.length > 20 ? s.slice(0, 18) + '…' : s };
+}
+
+function normaliseRole(r) {
+  if (!r) return 'Unspecified';
+  var s = r.trim();
+  if (!s || s === '\xa0' || s === 'Title' || s === 'NaN') return 'Unspecified';
+  // Skip values that are clearly not roles (SAP IDs are numeric, phone numbers start with 04)
+  if (/^\d{6,}$/.test(s)) return 'Unspecified';
+  if (/^04\d{8}/.test(s)) return 'Unspecified';
+
+  // ── Electrician variants ──────────────────────────────────────────
+  if (/sparky|electrician|\belec\b|elec\/sup|wwtp\s*elec|radlink\s*elec|radlink\s*electrical/i.test(s)) return 'Electrician';
+  if (/electrical\s*super/i.test(s)) return 'Electrical Supervisor';
+
+  // ── Plumber variants ─────────────────────────────────────────────
+  if (/plumb|wwtp\s*plumb|clay\s*rivers/i.test(s)) return 'Plumber';
+
+  // ── Refrigeration / Fridgy ───────────────────────────────────────
+  if (/fridgy|refriger|fridge/i.test(s)) return 'Refrigeration Mech';
+
+  // ── Diesel Mechanic ──────────────────────────────────────────────
+  if (/diesel|\bmech\b|uon\s*mech/i.test(s)) return 'Diesel Mech';
+
+  // ── Rigger ───────────────────────────────────────────────────────
+  if (/rigger/i.test(s)) return 'Rigger';
+
+  // ── Cook / Chef ──────────────────────────────────────────────────
+  if (/cook|chef/i.test(s)) return 'Cook/Chef';
+
+  // ── Supervisor variants ──────────────────────────────────────────
+  if (/mobe\s*crete\s*\(sup|drill\s*super|plumbing\s*super|radlink\s*super|fridgy\/super|elec\/sup/i.test(s)) return 'Supervisor';
+  if (/\bsupervisor\b|\bsup\b/i.test(s)) return 'Supervisor';
+
+  // ── Manager variants ─────────────────────────────────────────────
+  if (/manager|\bmgr\b|maint\.?\s*manager|maint\s*coordinator|contract\s*manager|nwmc\s*project\s*mgr/i.test(s)) return 'Manager';
+
+  // ── Safety ───────────────────────────────────────────────────────
+  if (/\bsafety\b/i.test(s)) return 'Safety Officer';
+
+  // ── Comms ────────────────────────────────────────────────────────
+  if (/comms|pca\s*comms|project\s*comms|pilbara\s*networks/i.test(s)) return 'Comms Tech';
+
+  // ── Operator ─────────────────────────────────────────────────────
+  if (/operator|nwmc\s*excav/i.test(s)) return 'Operator';
+
+  // ── General / Labourer ───────────────────────────────────────────
+  if (/labourer|laborer|\bgeneral\b|offsider|mobe\s*crete\s*\(lab|labour\s*hire/i.test(s)) return 'General/Labourer';
+
+  // ── Storeman ─────────────────────────────────────────────────────
+  if (/storeman/i.test(s)) return 'Storeman';
+
+  // ── Admin ────────────────────────────────────────────────────────
+  if (/admin|contracts\s*admin|office/i.test(s)) return 'Admin';
+
+  // ── Engineer ─────────────────────────────────────────────────────
+  if (/engineer|bca\s*eng|structural\s*insp|pca\b/i.test(s)) return 'Engineer';
+
+  // ── Cleaner ──────────────────────────────────────────────────────
+  if (/cleaner/i.test(s)) return 'Cleaner';
+
+  // ── Roofing ──────────────────────────────────────────────────────
+  if (/roofing/i.test(s)) return 'Roofing';
+
+  // ── Gas ──────────────────────────────────────────────────────────
+  if (/gas/i.test(s)) return 'Gas Inspector';
+
+  // ── Fire / Fire Tech ─────────────────────────────────────────────
+  if (/fire|wormald|fleurieu/i.test(s)) return 'Fire Tech';
+
+  // ── HVAC / Aircon ────────────────────────────────────────────────
+  if (/aircon|hvac/i.test(s)) return 'HVAC/Aircon';
+
+  // ── Trainer ──────────────────────────────────────────────────────
+  if (/trainer|assessor/i.test(s)) return 'Trainer/Assessor';
+
+  // ── Leading Hand ─────────────────────────────────────────────────
+  if (/leading\s*hand|team\s*leader/i.test(s)) return 'Leading Hand';
+
+  // ── Subcontractor companies — keep as-is but flag as Subcontractor ─
+  if (/wormald|cummins|westrac|all\s*gen|dra\s*tanks|crane\s*corp|radlink|seme|jetstream|dream\s*courts|fencewright|outback\s*trees|shire|ignite|inoksan|pwrpwr|regional\s*fire|roma\s*fire|aus\s*made|nasslec/i.test(s)) return 'Subcontractor';
+
+  // ── Contracts ────────────────────────────────────────────────────
+  if (/contracts\b/i.test(s)) return 'Contracts';
+
+  // ── WWS ──────────────────────────────────────────────────────────
+  if (/^wws/i.test(s)) return 'Water/Waste (WWS)';
+
+  // ── Maintenance (generic) ────────────────────────────────────────
+  if (/^maintenance$/i.test(s)) return 'Maintenance';
+
+  // ── SUB (generic subcontractor flag) ────────────────────────────
+  if (/^sub$/i.test(s)) return 'Subcontractor';
+
+  // Fallback — return cleaned value, truncate if very long
+  return s.length > 35 ? s.slice(0, 33) + '…' : s;
+}
+
+function isoDate(n) {
+  return new Date(Math.round((n - 25569) * 86400000)).toISOString().slice(0, 10);
+}
+
+// ── State ──────────────────────────────────────────────────────────
+var allPeople = [];
+var reportType = '';
+var selectedProject = '';    // single project (workforce/hours/trade)
+var selectedProjects = [];   // multiple projects (individual)
+var selectedPeople = [];
+var selectedTrades = [];
+var dateFrom = '';
+var dateTo = '';
+var outputMode = 'total'; // 'total' or 'daily'
+var rosterType = 'both'; // 'both', 'con', 'mnt'
+var fatigueThreshold = 14;
+var currentStep = 1;
+var exportData = { headers: [], rows: [], title: '', meta: '' };
+var loadedWorkbook = null; // raw SheetJS workbook, shared with sign-on generator
+var projectNames = {}; // map of project code -> full name e.g. { P1880: 'Brockman' }
+
+// ── File loading ───────────────────────────────────────────────────
+function parseSheet(ws, sheetType) {
+  // Extract project name map from sub-header rows (col3='Project', col8='P#### Name')
+  var rawFull = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+  rawFull.forEach(function(row) {
+    if (!row || row.length < 9) return;
+    var col3 = String(row[3] || '').trim();
+    var col8 = String(row[8] || '').trim();
+    // Match both: col3='Project' (Mnt Roster) and col3='P####' (Con Roster)
+    var isHeaderRow = (col3 === 'Project' || /^P[\w\-]+$/.test(col3));
+    if (isHeaderRow && /^P[\w\-]+\s+\S/.test(col8)) {
+      var m = col8.match(/^(P[\w\-]+)\s+(.*)/);
+      if (m) projectNames[m[1].trim()] = m[2].trim();
+    }
+  });
+  var raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+  if (!raw.length) return [];
+  var dri = -1;
+  for (var r = 0; r < Math.min(6, raw.length); r++) {
+    if (raw[r].filter(function(v) { return typeof v === 'number' && v > 40000 && v < 60000; }).length > 8) { dri = r; break; }
+  }
+  if (dri === -1) return [];
+  var dcols = [];
+  raw[dri].forEach(function(v, c) { if (typeof v === 'number' && v > 40000 && v < 60000) dcols.push({ col: c, date: isoDate(v) }); });
+  if (!dcols.length) return [];
+  var ci = { no: 0, proj: 3, last: 8, first: 9, role: -1, area: 5 };
+  // Scan the date row itself AND the rows immediately after it (up to 3)
+  // because when dri=0 the header labels sit in the same row or the rows just below
+  var scanRows = [dri, dri + 1, dri + 2];
+  scanRows.forEach(function(hi) {
+    var hr = raw[hi] || [];
+    hr.forEach(function(h, c) {
+      h = String(h || '').trim().toLowerCase();
+      if (/^project$/i.test(h) && ci.proj === 3) ci.proj = c;
+      if (/last.*name|surname/i.test(h)) ci.last = c;
+      if (/first.*name/i.test(h)) ci.first = c;
+      if (/^role$|^title$/i.test(h) && ci.role === -1) ci.role = c;
+      if (/^area$/i.test(h) && ci.area === 5) ci.area = c;
+      if (/^no$/i.test(h) && ci.no === 0) ci.no = c;
+    });
+  });
+  // Hard fallback based on known sheet layouts
+  if (ci.role === -1) {
+    // Check col 12 first (Con Roster layout), then col 11 (Mnt Roster layout)
+    var testVal12 = raw[dri + 2] && raw[dri + 2][12] ? String(raw[dri + 2][12]).trim() : '';
+    var testVal11 = raw[dri + 2] && raw[dri + 2][11] ? String(raw[dri + 2][11]).trim() : '';
+    // If col 12 looks like a role (not a number or phone), use it
+    if (testVal12 && !/^\d+$/.test(testVal12) && !/^04/.test(testVal12)) {
+      ci.role = 12;
+    } else {
+      ci.role = 11;
+    }
+  }
+  var people = [];
+  for (var r2 = dri + 1; r2 < raw.length; r2++) {
+    var row = raw[r2];
+    if (!row || !row.length) continue;
+    var rn = row[ci.no];
+    if (rn == null || !/^\d+$/.test(String(rn).trim())) continue;
+    var proj = String(row[ci.proj] || '').trim();
+    var last = String(row[ci.last] || '').trim();
+    var first = String(row[ci.first] || '').trim();
+    if (!proj || proj === 'Project' || proj === 'NaN') continue;
+    if (!last && !first) continue;
+    // Skip section header rows where the last name field contains a project title e.g. 'P1880 BS1 Brockman'
+    if (/^P[\w\-]+\s+/i.test(last)) continue;
+    var days = {};
+    dcols.forEach(function(dc) { if (row[dc.col] != null) { var s = String(row[dc.col]).trim(); if (s && s !== '0' && s !== '\xa0') days[dc.date] = s; } });
+    people.push({
+      project: proj, name: [first, last].filter(Boolean).join(' '),
+      role: normaliseRole(String(row[ci.role] || '').trim()),
+      area: String(row[ci.area] || '').trim(), days: days, sheetType: sheetType
+    });
+  }
+  return people;
+}
+
+document.getElementById('fileInput').addEventListener('change', function(e) {
+  var file = e.target.files[0]; if (!file) return;
+  document.getElementById('load-status').textContent = 'Reading file…';
+  document.getElementById('load-err').textContent = '';
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      var wb = XLSX.read(ev.target.result, { type: 'array' });
+      loadedWorkbook = wb; // store for sign-on generator
+      var people = [];
+      var sheets = wb.SheetNames.filter(function(n) { return /roster/i.test(n) && !/sub|leave|cycle|template/i.test(n); });
+      if (!sheets.length) { document.getElementById('load-err').textContent = 'No roster sheets found.'; document.getElementById('load-status').textContent = ''; return; }
+      sheets.forEach(function(n) {
+        // 'Con Roster...' = construction, 'Mnt Roster...' = maintenance
+        var st = /^con\s+roster/i.test(n.trim()) ? 'con' : 'mnt';
+        people = people.concat(parseSheet(wb.Sheets[n], st));
+      });
+      if (!people.length) { document.getElementById('load-err').textContent = 'No person data found — check sheet format.'; document.getElementById('load-status').textContent = ''; return; }
+      allPeople = people;
+      document.getElementById('upload-card').style.display = 'none';
+      document.getElementById('wizard').style.display = 'block';
+      document.getElementById('reloadBtn').style.display = 'inline';
+      document.getElementById('load-status').textContent = '';
+      populateProjects();
+      goStep(1);
+    } catch (er) { document.getElementById('load-err').textContent = 'Error: ' + er.message; document.getElementById('load-status').textContent = ''; }
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+function resetAll() {
+  allPeople = []; reportType = ''; selectedProject = ''; selectedPeople = []; selectedTrades = '';
+  document.getElementById('upload-card').style.display = 'block';
+  document.getElementById('wizard').style.display = 'none';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('reloadBtn').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+}
+
+// ── Project list ───────────────────────────────────────────────────
+function populateProjects() {
+  var filtered = rosterType === 'both' ? allPeople
+    : allPeople.filter(function(p) { return p.sheetType === rosterType; });
+  var projs = Array.from(new Set(filtered.map(function(p) { return p.project; }))).sort();
+  // single select
+  var sel = document.getElementById('projectSel');
+  sel.innerHTML = '<option value="">-- Select project --</option>' +
+    projs.map(function(p) { return '<option value="' + p + '">' + p + '</option>'; }).join('');
+  // multi select
+  var msel = document.getElementById('projectMultiSel');
+  msel.innerHTML = projs.map(function(p) { return '<option value="' + p + '">' + p + '</option>'; }).join('');
+  // reset selections
+  selectedProject = '';
+  selectedProjects = [];
+  document.getElementById('step2Next').disabled = true;
+}
+
+function setRosterType(rt, el) {
+  rosterType = rt;
+  document.querySelectorAll('#pill-both,#pill-con,#pill-mnt').forEach(function(p) { p.classList.remove('selected'); });
+  el.classList.add('selected');
+  populateProjects();
+  // re-run showProjectStep to rebuild the selector with filtered projects
+  showProjectStep();
+}
+
+function newReport() {
+  // Return to wizard step 1 without clearing the loaded roster data
+  reportType = '';
+  selectedProject = '';
+  selectedProjects = [];
+  selectedPeople = [];
+  selectedTrades = [];
+  outputMode = 'total';
+  var pl = document.getElementById('projectLegend');
+  if (pl) pl.remove();
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('wizard').style.display = 'block';
+  document.querySelectorAll('.rt-btn').forEach(function(b) { b.classList.remove('selected'); });
+  goStep(1);
+}
+
+function showProjectStep() {
+  var isIndividual = reportType === 'individual';
+  document.getElementById('step2Title').textContent = isIndividual ? 'Select projects' : 'Select project';
+  document.getElementById('step2Label').textContent = isIndividual ? 'Projects (select one or more)' : 'Project';
+  document.getElementById('projectSel').style.display = isIndividual ? 'none' : 'block';
+  document.getElementById('projectMultiSel').style.display = isIndividual ? 'block' : 'none';
+  document.getElementById('projectMultiBtns').style.display = isIndividual ? 'flex' : 'none';
+  document.getElementById('projectMultiNote').textContent = isIndividual
+    ? 'Hold Ctrl/Cmd to select multiple projects. People will be drawn from all selected projects.'
+    : '';
+  document.getElementById('step2Next').disabled = true;
+  if (isIndividual) {
+    // default select all projects
+    var opts = document.getElementById('projectMultiSel').options;
+    for (var i = 0; i < opts.length; i++) opts[i].selected = true;
+    selectedProjects = Array.from(document.getElementById('projectMultiSel').options).map(function(o){return o.value;});
+    updateDateRangeForProjects(selectedProjects);
+    document.getElementById('step2Next').disabled = selectedProjects.length === 0;
+  }
+}
+
+function onProjectChange() {
+  selectedProject = document.getElementById('projectSel').value;
+  document.getElementById('step2Next').disabled = !selectedProject;
+  if (selectedProject) {
+    var ppl = allPeople.filter(function(p) { return p.project === selectedProject; });
+    var dates = []; ppl.forEach(function(p) { dates = dates.concat(Object.keys(p.days)); });
+    dates.sort();
+    if (dates.length) {
+      document.getElementById('dateFrom').value = dates[0];
+      document.getElementById('dateTo').value = dates[dates.length - 1];
+      document.getElementById('dateNote').textContent = 'Dates default to the full span of ' + selectedProject + ' (' + dates[0] + ' to ' + dates[dates.length - 1] + ')';
+    }
+    var pNote = { workforce: 'All people on ' + selectedProject + ' will be available to select', hours: 'Filter to all or specific people on ' + selectedProject, trade: 'Trade breakdown for ' + selectedProject };
+    document.getElementById('projectNote').textContent = pNote[reportType] || '';
+  }
+}
+
+function onProjectMultiChange() {
+  var chosen = Array.from(document.getElementById('projectMultiSel').selectedOptions).map(function(o){return o.value;});
+  selectedProjects = chosen;
+  document.getElementById('step2Next').disabled = chosen.length === 0;
+  if (chosen.length) updateDateRangeForProjects(chosen);
+}
+
+function updateDateRangeForProjects(projs) {
+  var ppl = allPeople.filter(function(p) { return projs.indexOf(p.project) > -1; });
+  var dates = []; ppl.forEach(function(p) { dates = dates.concat(Object.keys(p.days)); });
+  dates.sort();
+  if (dates.length) {
+    document.getElementById('dateFrom').value = dates[0];
+    document.getElementById('dateTo').value = dates[dates.length - 1];
+    document.getElementById('dateNote').textContent = 'Date range covers all selected projects (' + dates[0] + ' to ' + dates[dates.length - 1] + ')';
+  }
+}
+
+function selectAllProjects() {
+  var opts = document.getElementById('projectMultiSel').options;
+  for (var i = 0; i < opts.length; i++) opts[i].selected = true;
+  selectedProjects = Array.from(opts).map(function(o){return o.value;});
+  document.getElementById('step2Next').disabled = false;
+  updateDateRangeForProjects(selectedProjects);
+}
+function clearProjects() {
+  var opts = document.getElementById('projectMultiSel').options;
+  for (var i = 0; i < opts.length; i++) opts[i].selected = false;
+  selectedProjects = [];
+  document.getElementById('step2Next').disabled = true;
+}
+
+// ── Step navigation ────────────────────────────────────────────────
+function goStep(n) {
+  [1,2,3,4,5].forEach(function(i) {
+    document.getElementById('step' + i).style.display = i === n ? 'block' : 'none';
+    var s = document.getElementById('s' + i);
+    s.className = 'step' + (i < n ? ' done' : i === n ? ' active' : '');
+  });
+  document.getElementById('results').style.display = 'none';
+  currentStep = n;
+  if (n === 2) showProjectStep();
+  if (n === 3) buildStep3();
+  if (n === 5) buildStep5();
+}
+
+function selectRT(rt) {
+  reportType = rt;
+  document.querySelectorAll('.rt-btn').forEach(function(b) { b.classList.remove('selected'); });
+  event.currentTarget.classList.add('selected');
+  // auto-advance to step 2 after brief moment
+  setTimeout(function() { goStep(2); }, 200);
+}
+
+// ── Step 3: People / Trade builder ────────────────────────────────
+function buildStep3() {
+  // For individual: draw people from all selected projects; for others: single project
+  var ppl = reportType === 'individual'
+    ? getBasePeople().filter(function(p) { return selectedProjects.indexOf(p.project) > -1; })
+    : getBasePeople().filter(function(p) { return p.project === selectedProject; });
+
+  var el = document.getElementById('step3Content');
+  var next = document.getElementById('step3Next');
+
+  if (reportType === 'fatigue') {
+    el.innerHTML = '<p style="font-size:13px;color:#555;line-height:1.7">The fatigue report will scan every person on the selected project and flag any consecutive run of ' + fatigueThreshold + ' or more work/travel days without a break. Each breach is shown as a separate row. Output is sorted by longest run first.</p>';
+    outputMode = 'fatigue';
+    return;
+  }
+  if (reportType === 'individual') {
+    document.getElementById('step3Title').textContent = 'Select people';
+    var names = Array.from(new Set(ppl.map(function(p) { return p.name; }))).sort();
+    el.innerHTML = '<div class="form-row"><div class="form-group">' +
+      '<label class="fl">People — ' + selectedProjects.join(', ') + '</label>' +
+      '<select id="peopleSel" multiple onchange="onPeopleSelChange()" style="min-height:150px;min-width:260px">' +
+      names.map(function(n) { return '<option value="' + esc(n) + '" selected>' + n + '</option>'; }).join('') +
+      '</select>' +
+      '<p class="step-note" style="margin-top:6px">Hold Ctrl/Cmd to select multiple. All selected by default. Each person becomes a row in the roster grid.</p>' +
+      '</div></div>' +
+      '<div class="btn-row"><button class="btn-secondary" onclick="selectAllPeople()">Select all</button><button class="btn-secondary" onclick="clearPeople()">Clear</button></div>';
+    selectedPeople = names; // default all selected
+    next.disabled = names.length === 0;
+
+  } else if (reportType === 'workforce' || reportType === 'hours') {
+    document.getElementById('step3Title').textContent = 'Select people';
+    var names2 = Array.from(new Set(ppl.map(function(p) { return p.name; }))).sort();
+    el.innerHTML = '<div class="form-row"><div class="form-group">' +
+      '<label class="fl">People</label>' +
+      '<select id="peopleSel" multiple onchange="onPeopleSelChange()">' +
+      names2.map(function(n) { return '<option value="' + esc(n) + '">' + n + '</option>'; }).join('') +
+      '</select>' +
+      '<p class="step-note" style="margin-top:6px">Hold Ctrl/Cmd to select multiple. Leave all unselected to include everyone.</p></div></div>' +
+      '<div class="btn-row"><button class="btn-secondary" onclick="selectAllPeople()">Select all</button><button class="btn-secondary" onclick="clearPeople()">Clear</button></div>';
+    selectedPeople = names2; // default all
+    next.disabled = false;
+
+  } else if (reportType === 'trade') {
+    document.getElementById('step3Title').textContent = 'Select trades';
+    var trades = Array.from(new Set(ppl.map(function(p) { return p.role; }))).sort();
+    el.innerHTML = '<div class="form-row"><div class="form-group">' +
+      '<label class="fl">Trades / Roles</label>' +
+      '<select id="tradeSel" multiple onchange="onTradeSelChange()">' +
+      trades.map(function(t) { return '<option value="' + esc(t) + '">' + t + '</option>'; }).join('') +
+      '</select>' +
+      '<p class="step-note" style="margin-top:6px">Hold Ctrl/Cmd to select multiple. Leave all unselected to include all trades.</p></div></div>' +
+      '<div class="btn-row"><button class="btn-secondary" onclick="selectAllTrades()">Select all</button><button class="btn-secondary" onclick="clearTrades()">Clear</button></div>';
+    selectedTrades = trades;
+    next.disabled = false;
+
+  } else if (reportType === 'fatigue') {
+    document.getElementById('step3Title').textContent = 'Fatigue threshold';
+    el.innerHTML = '<div class="form-group">' +
+      '<label class="fl">Maximum consecutive days before fatigue flag</label>' +
+      '<div class="radio-group" style="margin-top:8px">' +
+      '<label class="radio-pill selected" id="fat-14" onclick="setFatigueThreshold(14,this)"><input type="radio" name="fatThresh" checked> 14 days (default)</label>' +
+      '<label class="radio-pill" id="fat-10" onclick="setFatigueThreshold(10,this)"><input type="radio" name="fatThresh"> 10 days</label>' +
+      '<label class="radio-pill" id="fat-21" onclick="setFatigueThreshold(21,this)"><input type="radio" name="fatThresh"> 21 days</label>' +
+      '</div>' +
+      '<p class="step-note" style="margin-top:10px">Flags any worker who reaches or exceeds the threshold in a consecutive run of work and travel days without a break (RnR, A/L, RDO, Sick, or blank). The date shown is when they first exceed the limit. Multiple breaches per person are each reported separately.</p>' +
+      '</div>';
+    next.disabled = false;
+  }
+}
+
+function onPeopleSelChange() {
+  var sel = document.getElementById('peopleSel');
+  var chosen = Array.from(sel.selectedOptions).map(function(o) { return o.value; });
+  selectedPeople = chosen.length ? chosen : Array.from(sel.options).map(function(o) { return o.value; });
+}
+function selectAllPeople() { var s = document.getElementById('peopleSel'); Array.from(s.options).forEach(function(o){o.selected=true;}); selectedPeople = Array.from(s.options).map(function(o){return o.value;}); }
+function clearPeople() { var s = document.getElementById('peopleSel'); Array.from(s.options).forEach(function(o){o.selected=false;}); selectedPeople = Array.from(s.options).map(function(o){return o.value;}); }
+function onTradeSelChange() {
+  var sel = document.getElementById('tradeSel');
+  var chosen = Array.from(sel.selectedOptions).map(function(o) { return o.value; });
+  selectedTrades = chosen.length ? chosen : Array.from(sel.options).map(function(o) { return o.value; });
+}
+function selectAllTrades() { var s = document.getElementById('tradeSel'); Array.from(s.options).forEach(function(o){o.selected=true;}); selectedTrades = Array.from(s.options).map(function(o){return o.value;}); }
+function clearTrades() { var s = document.getElementById('tradeSel'); Array.from(s.options).forEach(function(o){o.selected=false;}); selectedTrades = Array.from(s.options).map(function(o){return o.value;}); }
+
+// ── Step 5: Output options ─────────────────────────────────────────
+function buildStep5() {
+  var el = document.getElementById('outputOptions');
+  if (reportType === 'individual') {
+    el.innerHTML = '<p style="font-size:13px;color:#555;line-height:1.7">The roster grid will show <b>one row per person</b> and <b>one column per day</b> across the selected date range — the same layout as your source roster. Summary columns (work days, hours, travel days, travel hours, total hours) are appended at the right. A totals row at the bottom shows how many people were active each day.<br><br>The Excel download freezes the Name, Role and Projects columns so you can scroll across dates while keeping names visible.</p>';
+    outputMode = 'grid';
+  } else if (reportType === 'workforce') {
+    el.innerHTML = '<p style="font-size:13px;color:#555;line-height:1.7">Workforce grid: people as rows, dates as columns, roster status in each cell — matches your existing roster layout.</p>';
+    outputMode = 'grid';
+  } else {
+    el.innerHTML = '<div class="form-group"><label class="fl">Output format</label>' +
+      '<div class="radio-group">' +
+      '<label class="radio-pill' + (outputMode==='total'?' selected':'') + '" onclick="setMode(\'total\',this)"><input type="radio" name="mode" value="total" ' + (outputMode==='total'?'checked':'') + '> Period total</label>' +
+      '<label class="radio-pill' + (outputMode==='daily'?' selected':'') + '" onclick="setMode(\'daily\',this)"><input type="radio" name="mode" value="daily" ' + (outputMode==='daily'?'checked':'') + '> Day by day</label>' +
+      '</div><p class="step-note" style="margin-top:8px">' +
+      (reportType === 'hours'
+        ? '<b>Period total</b> — one row per person, hours summed across the date range.<br><b>Day by day</b> — one row per calendar day, hours per person for that day.'
+        : '<b>Period total</b> — one row per trade, total work days and hours across the date range.<br><b>Day by day</b> — dates as rows, trades as columns, headcount per trade in each cell.') +
+      '</p></div>';
+  }
+}
+function setFatigueThreshold(n, el) {
+  fatigueThreshold = n;
+  document.querySelectorAll('#fat-14,#fat-10,#fat-21').forEach(function(p) { p.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+
+function setMode(m, el) {
+  outputMode = m;
+  document.querySelectorAll('.radio-pill').forEach(function(p){p.classList.remove('selected');});
+  el.classList.add('selected');
+}
+
+// ── Report generation ──────────────────────────────────────────────
+function generateReport() {
+  var df = document.getElementById('dateFrom').value;
+  var dt = document.getElementById('dateTo').value;
+  if (!df || !dt) { alert('Please select a date range.'); return; }
+  dateFrom = df; dateTo = dt;
+
+  // Sync final selections — always re-read the people selector regardless of report type
+  var ps = document.getElementById('peopleSel');
+  if (ps) {
+    var chosen = Array.from(ps.selectedOptions).map(function(o){return o.value;});
+    // If nothing explicitly selected, treat as all selected
+    selectedPeople = chosen.length ? chosen : Array.from(ps.options).map(function(o){return o.value;});
+  }
+  if (reportType === 'individual') {
+    // sync projects from multi-select
+    var pm = document.getElementById('projectMultiSel');
+    if (pm) {
+      var cp = Array.from(pm.selectedOptions).map(function(o){return o.value;});
+      if (cp.length) selectedProjects = cp;
+    }
+  }
+
+  // Sync trades selector
+  var ts = document.getElementById('tradeSel');
+  if (ts) {
+    var chosenT = Array.from(ts.selectedOptions).map(function(o){return o.value;});
+    selectedTrades = chosenT.length ? chosenT : Array.from(ts.options).map(function(o){return o.value;});
+  }
+
+  document.getElementById('wizard').style.display = 'none';
+  document.getElementById('results').style.display = 'block';
+
+  if (reportType === 'individual') buildIndividual();
+  else if (reportType === 'fatigue') buildFatigue();
+  else if (reportType === 'workforce') buildWorkforce();
+  else if (reportType === 'hours') buildHours();
+  else if (reportType === 'trade') buildTrade();
+}
+
+function backToWizard() {
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('wizard').style.display = 'block';
+  goStep(5);
+}
+
+// Returns allPeople filtered by current rosterType selection
+function getBasePeople() {
+  return rosterType === 'both' ? allPeople
+    : allPeople.filter(function(p) { return p.sheetType === rosterType; });
+}
+
+function getDates() {
+  var dates = [], d = new Date(dateFrom);
+  var end = new Date(dateTo);
+  while (d <= end) { dates.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); }
+  return dates;
+}
+
+function fmtDate(iso) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: '2-digit' });
+}
+function fmtH(n) { return Number(n).toLocaleString('en-AU', { minimumFractionDigits:1, maximumFractionDigits:1 }); }
+function fmt(n) { return Number(n).toLocaleString('en-AU'); }
+
+// ── Report 1: Individual roster grid ──────────────────────────────
+// People as rows, dates as columns — same layout as source roster
+function buildIndividual() {
+  // Build merged day map per person across all selected projects
+  // Conflict rule: work/travel beats blank; first project with entry wins between two non-blank
+  var personMap = {};
+  selectedProjects.forEach(function(proj) {
+    getBasePeople().filter(function(p) { return p.project === proj && selectedPeople.indexOf(p.name) > -1; })
+      .forEach(function(p) {
+        if (!personMap[p.name]) personMap[p.name] = { name: p.name, role: p.role, projects: [], days: {} };
+        if (personMap[p.name].projects.indexOf(proj) === -1) personMap[p.name].projects.push(proj);
+        // merge days — store { val, proj } — work/travel takes priority over blank
+        Object.keys(p.days).forEach(function(d) {
+          var incoming = { val: p.days[d], proj: proj };
+          var existing = personMap[p.name].days[d];
+          if (!existing) {
+            personMap[p.name].days[d] = incoming;
+          } else {
+            var inCls = classifyDay(incoming.val).type;
+            var exCls = classifyDay(existing.val).type;
+            if ((inCls === 'work' || inCls === 'travel') && exCls !== 'work' && exCls !== 'travel') {
+              personMap[p.name].days[d] = incoming;
+            }
+          }
+        });
+      });
+  });
+
+  var people = Object.values(personMap).sort(function(a,b){return a.name.localeCompare(b.name);});
+  if (!people.length) { showEmpty('No data found for selected people and projects.'); return; }
+
+  // Only include dates where at least one person has a non-blank entry
+  var allDates = getDates();
+  var dates = allDates.filter(function(d) {
+    return people.some(function(p) {
+      if (!p.days[d]) return false;
+      var val = typeof p.days[d] === 'object' ? p.days[d].val : p.days[d];
+      return classifyDay(val).type !== 'blank';
+    });
+  });
+  var totalWd = 0, totalTd = 0;
+
+  // Headers: Name | Role | Projects | [date cols] | Work days | Work hrs | Travel days | Travel hrs | Total hrs
+  var fixedHeaders = ['Name', 'Role', 'Projects'];
+  var dateHeaders = dates.map(fmtDate);
+  var summaryHeaders = ['Work days', 'Work hrs', 'Travel days', 'Travel hrs', 'Total hrs'];
+  var headers = fixedHeaders.concat(dateHeaders).concat(summaryHeaders);
+
+  var rows = people.map(function(p) {
+    var wd = 0, td = 0;
+    var dateCells = dates.map(function(d) {
+      var entry = p.days[d];
+      if (!entry) return '';
+      var raw = typeof entry === 'object' ? entry.val : entry;
+      var proj = typeof entry === 'object' ? entry.proj : p.projects[0];
+      var cls = classifyDay(raw);
+      if (cls.type === 'work') {
+        wd++;
+        // Show project code so reader knows where the person is working that day
+        return proj || raw;
+      }
+      if (cls.type === 'travel') td++;
+      return raw;
+    });
+    totalWd += wd; totalTd += td;
+    return [p.name, p.role, p.projects.join(', ')].concat(dateCells).concat([
+      wd, +(wd * HRS).toFixed(1), td, +(td * HRS).toFixed(1), +((wd + td) * HRS).toFixed(1)
+    ]);
+  });
+
+  // Totals row
+  var fixedOffset = fixedHeaders.length;
+  var summaryOffset = fixedOffset + dates.length;
+  var totalsRow = ['TOTALS', '', ''];
+  dates.forEach(function(d) {
+    // count people active on this date
+    var active = people.filter(function(p) {
+      if (!p.days[d]) return false;
+      var val = typeof p.days[d] === 'object' ? p.days[d].val : p.days[d];
+      var cls = classifyDay(val);
+      return cls.type === 'work' || cls.type === 'travel';
+    }).length;
+    totalsRow.push(active > 0 ? active + ' active' : '');
+  });
+  totalsRow = totalsRow.concat([
+    totalWd, +(totalWd * HRS).toFixed(1), totalTd, +(totalTd * HRS).toFixed(1), +((totalWd + totalTd) * HRS).toFixed(1)
+  ]);
+  rows.push(totalsRow);
+
+  var projLabel = selectedProjects.length > 1 ? selectedProjects.join(', ') : selectedProjects[0];
+  setResultHeader('Individual Roster — ' + projLabel, people.length - 0 + ' people · ' + dateFrom + ' to ' + dateTo + ' · ' + dates.length + ' days');
+  setMetrics([
+    {label:'Work days',val:fmt(totalWd),cls:'work'},
+    {label:'Work hours',val:fmtH(totalWd*HRS),cls:'work'},
+    {label:'Travel days',val:fmt(totalTd),cls:'travel'},
+    {label:'Travel hours',val:fmtH(totalTd*HRS),cls:'travel'},
+    {label:'Total hours',val:fmtH((totalWd+totalTd)*HRS),cls:'total'},
+    {label:'People',val:fmt(people.length)}
+  ]);
+  setLegend();
+  renderProjectLegend(selectedProjects);
+
+  // Cell classifier for colour coding
+  var tdCls = function(row, i) {
+    if (i === 0) return row[0] === 'TOTALS' ? 'bv' : 'bv';
+    if (i === 1 || i === 2) return 'muted';
+    if (i >= summaryOffset) {
+      if (i === summaryOffset || i === summaryOffset+1) return 'num wv';
+      if (i === summaryOffset+2 || i === summaryOffset+3) return 'num tv';
+      return 'num bv';
+    }
+    // date cell — value is now the project code (for work days) or status string
+    var raw = row[i];
+    if (!raw) return '';
+    // work day cells show project code - classify as work
+    if (/^P[\w\-]+$/.test(String(raw).trim())) return 's-work';
+    var cls = classifyDay(raw);
+    return cls.type==='work'?'s-work':cls.type==='travel'?'s-travel':cls.type==='rnr'?'s-rnr':cls.type==='sick'?'s-sick':cls.type==='leave'?'s-leave':'s-other';
+  };
+
+  var thCls = fixedHeaders.map(function(){return '';})
+    .concat(dateHeaders.map(function(){return 'num';}))
+    .concat(['num wc','num wc','num tc','num tc','num oc']);
+
+  buildTable(headers, rows, thCls, tdCls);
+
+  exportData = {
+    headers: headers,
+    rows: rows.map(function(r){ return r.map(function(v){ return v === null || v === undefined ? '' : v; }); }),
+    title: 'Individual Roster — ' + projLabel,
+    meta: people.length + ' people | ' + dateFrom + ' to ' + dateTo + ' | 10.5 hrs/day'
+  };
+}
+
+// ── Report 2: Workforce grid ───────────────────────────────────────
+function buildWorkforce() {
+  var ppl = getBasePeople().filter(function(p) { return p.project === selectedProject && selectedPeople.indexOf(p.name) > -1; });
+  var merged = {};
+  ppl.forEach(function(p) {
+    if (!merged[p.name]) merged[p.name] = { name: p.name, role: p.role, area: p.area, days: {} };
+    Object.assign(merged[p.name].days, p.days);
+  });
+  var dates = getDates();
+  // Remove people who have no work or travel entries within the selected date range
+  var people = Object.values(merged).filter(function(p) {
+    return dates.some(function(d) {
+      var cls = classifyDay(p.days[d]);
+      return cls.type === 'work' || cls.type === 'travel';
+    });
+  }).sort(function(a,b){return a.name.localeCompare(b.name);});
+  var wd=0, td=0;
+
+  var headers = ['Name', 'Role', 'Area'].concat(dates.map(fmtDate));
+  var rows = people.map(function(p) {
+    var row = [p.name, p.role, p.area];
+    dates.forEach(function(d) {
+      var raw = p.days[d] || '';
+      var cls = classifyDay(raw);
+      if (cls.type === 'work') wd++;
+      if (cls.type === 'travel') td++;
+      row.push(raw || '');
+    });
+    return row;
+  });
+
+  setResultHeader('Project Workforce — ' + selectedProject, people.length + ' people · ' + dateFrom + ' to ' + dateTo + ' · ' + dates.length + ' days');
+  setMetrics([{label:'Work days',val:fmt(wd),cls:'work'},{label:'Work hours',val:fmtH(wd*HRS),cls:'work'},{label:'Travel days',val:fmt(td),cls:'travel'},{label:'Travel hours',val:fmtH(td*HRS),cls:'travel'}]);
+  setLegend();
+
+  var thCls = headers.map(function(_,i){return i<3?'':'';});
+  var tdCls = function(r,i) {
+    if (i < 3) return i===0?'bv':'muted';
+    var raw = r[i]; var cls = classifyDay(raw);
+    return cls.type==='work'?'s-work':cls.type==='travel'?'s-travel':cls.type==='rnr'?'s-rnr':cls.type==='sick'?'s-sick':cls.type==='leave'?'s-leave':'s-other';
+  };
+  buildTable(headers, rows, thCls, tdCls);
+  exportData = { headers: headers, rows: rows, title: 'Project Workforce — ' + selectedProject, meta: people.length + ' people | ' + dateFrom + ' to ' + dateTo };
+}
+
+// ── Report 3: Hours summary ────────────────────────────────────────
+function buildHours() {
+  var ppl = getBasePeople().filter(function(p) { return p.project === selectedProject && selectedPeople.indexOf(p.name) > -1; });
+  var merged = {};
+  ppl.forEach(function(p) {
+    if (!merged[p.name]) merged[p.name] = { name: p.name, role: p.role, area: p.area, days: {} };
+    Object.assign(merged[p.name].days, p.days);
+  });
+  var people = Object.values(merged).sort(function(a,b){return a.name.localeCompare(b.name);});
+  var dates = getDates();
+
+  if (outputMode === 'total') {
+    var headers = ['Name', 'Role', 'Area', 'Work days', 'Work hours', 'Travel days', 'Travel hours', 'Total days', 'Total hours'];
+    var rows = people.map(function(p) {
+      var wd=0, trd=0;
+      dates.forEach(function(d){ var c=classifyDay(p.days[d]); if(c.type==='work')wd++; if(c.type==='travel')trd++; });
+      return [p.name, p.role, p.area, wd, +(wd*HRS).toFixed(1), trd, +(trd*HRS).toFixed(1), wd+trd, +((wd+trd)*HRS).toFixed(1)];
+    });
+    var totW = rows.reduce(function(s,r){return s+r[3];},0);
+    var totT = rows.reduce(function(s,r){return s+r[5];},0);
+    // totals row
+    rows.push(['TOTAL', '', '', totW, +(totW*HRS).toFixed(1), totT, +(totT*HRS).toFixed(1), totW+totT, +((totW+totT)*HRS).toFixed(1)]);
+    setResultHeader('Hours Summary — ' + selectedProject, people.length + ' people · ' + dateFrom + ' to ' + dateTo);
+    setMetrics([{label:'Work days',val:fmt(totW),cls:'work'},{label:'Work hours',val:fmtH(totW*HRS),cls:'work'},{label:'Travel days',val:fmt(totT),cls:'travel'},{label:'Travel hours',val:fmtH(totT*HRS),cls:'travel'},{label:'Total hours',val:fmtH((totW+totT)*HRS),cls:'total'}]);
+    var thCls=['','','','num wc','num wc','num tc','num tc','num','num'];
+    var tdCls=function(r,i){if(i>=3&&i<=4)return 'num wv';if(i>=5&&i<=6)return 'num tv';if(i>=7)return 'num bv';if(i===0&&r[0]==='TOTAL')return 'bv';return i>=1?'muted':'';};
+    buildTable(headers, rows, thCls, tdCls);
+    exportData={headers:headers,rows:rows,title:'Hours Summary — '+selectedProject,meta:people.length+' people | '+dateFrom+' to '+dateTo};
+
+  } else {
+    // daily
+    var headers2 = ['Date', 'Day'].concat(people.map(function(p){return p.name+'\nWork d';})).concat(people.map(function(p){return p.name+'\nTravel d';}));
+    // simpler: Date | Day | Person1 Work hrs | Person1 Travel hrs | ...
+    var headers3 = ['Date','Day'];
+    people.forEach(function(p){ headers3.push(p.name+' — Work hrs'); headers3.push(p.name+' — Travel hrs'); });
+    headers3.push('Daily work hrs total'); headers3.push('Daily travel hrs total');
+
+    var rows3 = dates.map(function(d) {
+      var row = [fmtDate(d), new Date(d+'T00:00:00').toLocaleDateString('en-AU',{weekday:'short'})];
+      var dw=0, dt2=0;
+      people.forEach(function(p){
+        var c=classifyDay(p.days[d]);
+        var wh=c.type==='work'?HRS:0, th=c.type==='travel'?HRS:0;
+        dw+=wh; dt2+=th;
+        row.push(wh||''); row.push(th||'');
+      });
+      row.push(dw||''); row.push(dt2||'');
+      return row;
+    });
+    var totW2=0,totT2=0;
+    rows3.forEach(function(r){totW2+=Number(r[r.length-2])||0;totT2+=Number(r[r.length-1])||0;});
+    setResultHeader('Hours Summary (Daily) — '+selectedProject, people.length+' people · '+dateFrom+' to '+dateTo);
+    setMetrics([{label:'Work hours',val:fmtH(totW2),cls:'work'},{label:'Travel hours',val:fmtH(totT2),cls:'travel'},{label:'Total hours',val:fmtH(totW2+totT2),cls:'total'}]);
+    buildTable(headers3, rows3, [], function(r,i){return i>=2?'num':'';});
+    exportData={headers:headers3,rows:rows3,title:'Hours Summary Daily — '+selectedProject,meta:people.length+' people | '+dateFrom+' to '+dateTo};
+  }
+}
+
+// ── Report 4: Trade report ─────────────────────────────────────────
+function buildTrade() {
+  var ppl = getBasePeople().filter(function(p) { return p.project === selectedProject && selectedTrades.indexOf(p.role) > -1; });
+  var merged = {};
+  ppl.forEach(function(p) {
+    var key = p.name+'||'+p.role;
+    if (!merged[key]) merged[key] = { name: p.name, role: p.role, days: {} };
+    Object.assign(merged[key].days, p.days);
+  });
+  var people = Object.values(merged);
+  var dates = getDates();
+
+  // Get distinct sorted trades from people in scope
+  var trades = Array.from(new Set(people.map(function(p){return p.role;}))).sort();
+
+  if (outputMode === 'total') {
+    // Rows = trades, Columns = Date | People rostered | Work days | Work hrs | Travel days | Travel hrs | Total days | Total hrs
+    // (period total — one row per trade)
+    var tradeMap = {};
+    people.forEach(function(p) {
+      if (!tradeMap[p.role]) tradeMap[p.role] = { role: p.role, people: new Set(), wd: 0, td: 0 };
+      tradeMap[p.role].people.add(p.name);
+      dates.forEach(function(d) {
+        var c = classifyDay(p.days[d]);
+        if (c.type === 'work') tradeMap[p.role].wd++;
+        if (c.type === 'travel') tradeMap[p.role].td++;
+      });
+    });
+    var trows = Object.values(tradeMap).sort(function(a,b){return b.wd-a.wd;}).map(function(r){
+      return [r.role, r.people.size, r.wd, +(r.wd*HRS).toFixed(1), r.td, +(r.td*HRS).toFixed(1), r.wd+r.td, +((r.wd+r.td)*HRS).toFixed(1)];
+    });
+    var totW=trows.reduce(function(s,r){return s+r[2];},0), totT=trows.reduce(function(s,r){return s+r[4];},0);
+    trows.push(['TOTAL', '', totW, +(totW*HRS).toFixed(1), totT, +(totT*HRS).toFixed(1), totW+totT, +((totW+totT)*HRS).toFixed(1)]);
+    var headers=['Trade / Role','People rostered','Work days','Work hours','Travel days','Travel hours','Total days','Total hours'];
+    setResultHeader('Trade Report — '+selectedProject, trades.length+' trades · '+dateFrom+' to '+dateTo);
+    setMetrics([{label:'Work days',val:fmt(totW),cls:'work'},{label:'Work hours',val:fmtH(totW*HRS),cls:'work'},{label:'Travel days',val:fmt(totT),cls:'travel'},{label:'Travel hours',val:fmtH(totT*HRS),cls:'travel'},{label:'Total hours',val:fmtH((totW+totT)*HRS),cls:'total'}]);
+    buildTable(headers,trows,['','num','num wc','num wc','num tc','num tc','num','num'],
+      function(r,i){if(i>=2&&i<=3)return'num wv';if(i>=4&&i<=5)return'num tv';if(i>=6)return'num bv';if(i===0&&r[0]==='TOTAL')return'bv';return i===1?'num':'';});
+    exportData={headers:headers,rows:trows,title:'Trade Report — '+selectedProject,meta:trades.length+' trades | '+dateFrom+' to '+dateTo};
+
+  } else {
+    // FLIPPED GRID: rows = dates, columns = trades (headcount per trade per day)
+    // Headers: Date | Day | [Trade1] | [Trade2] | ... | Total headcount
+    var fixedH = ['Date','Day'];
+    var tradeHeaders = trades.map(function(t){ return t; });
+    var summaryH = ['Total on site'];
+    var headers2 = fixedH.concat(tradeHeaders).concat(summaryH);
+
+    // Only include dates where at least one person is active
+    var activeDates = dates.filter(function(d){
+      return people.some(function(p){
+        var c = classifyDay(p.days[d]);
+        return c.type === 'work' || c.type === 'travel';
+      });
+    });
+
+    var grandTotal = 0;
+    var tradeTotals = trades.map(function(){ return 0; });
+
+    var drows = activeDates.map(function(d) {
+      var dayName = new Date(d+'T00:00:00').toLocaleDateString('en-AU',{weekday:'short'});
+      var row = [fmtDate(d), dayName];
+      var rowTotal = 0;
+      trades.forEach(function(t, ti) {
+        // headcount = people of this trade who have a work OR travel entry on this date
+        var hc = people.filter(function(p){
+          if (p.role !== t) return false;
+          var c = classifyDay(p.days[d]);
+          return c.type === 'work' || c.type === 'travel';
+        }).length;
+        row.push(hc || '');
+        tradeTotals[ti] += hc;
+        rowTotal += hc;
+      });
+      row.push(rowTotal || '');
+      grandTotal += rowTotal;
+      return row;
+    });
+
+    // Totals row at bottom
+    var totalsRow = ['TOTALS', ''].concat(tradeTotals.map(function(t){ return t || ''; })).concat([grandTotal || '']);
+    drows.push(totalsRow);
+
+    var totHC = people.filter(function(p){
+      return activeDates.some(function(d){
+        var c = classifyDay(p.days[d]);
+        return c.type === 'work' || c.type === 'travel';
+      });
+    }).length;
+
+    setResultHeader('Trade Report (Daily) — '+selectedProject, trades.length+' trades · '+dateFrom+' to '+dateTo+' · '+activeDates.length+' active days');
+    setMetrics([
+      {label:'Active days',val:fmt(activeDates.length)},
+      {label:'Trades',val:fmt(trades.length)},
+      {label:'Total people',val:fmt(totHC)},
+      {label:'Total headcount days',val:fmt(grandTotal)}
+    ]);
+
+    var thCls2 = fixedH.map(function(){return '';})
+      .concat(trades.map(function(){return 'num';}))
+      .concat(['num oc']);
+
+    buildTable(headers2, drows, thCls2, function(row, i){
+      if (i < 2) return row[0]==='TOTALS'?'bv':'';
+      if (i === headers2.length-1) return 'num bv';
+      var val = row[i];
+      if (!val) return 'num';
+      return 'num wv';
+    });
+
+    exportData={
+      headers: headers2,
+      rows: drows.map(function(r){ return r.map(function(v){ return v===''||v==null?'':v; }); }),
+      title:'Trade Report Daily — '+selectedProject,
+      meta: trades.length+' trades | '+dateFrom+' to '+dateTo+' | Headcount = people of that trade active (work or travel) each day'
+    };
+  }
+}
+
+// ── Report 5: Fatigue ─────────────────────────────────────────────
+function buildFatigue() {
+  var proj = selectedProject;
+  var ppl = getBasePeople().filter(function(p) { return proj === 'ALL' || p.project === proj; });
+
+  // Merge duplicate person+project rows
+  var merged = {};
+  ppl.forEach(function(p) {
+    var key = p.name + '||' + p.project;
+    if (!merged[key]) merged[key] = { name: p.name, project: p.project, role: p.role, days: {} };
+    Object.assign(merged[key].days, p.days);
+  });
+
+  var people = Object.values(merged);
+
+  // Get all dates across the entire roster span for this project (not just selected range)
+  // so we can detect runs that started before the from date
+  var allDates = [];
+  var dateSet = new Set();
+  people.forEach(function(p) { Object.keys(p.days).forEach(function(d) { if (!dateSet.has(d)) { dateSet.add(d); allDates.push(d); } }); });
+  allDates.sort();
+
+  // Date range filter for reporting (only report breaches that fall within selected range)
+  var rFrom = document.getElementById('dateFrom').value;
+  var rTo = document.getElementById('dateTo').value;
+
+  var breaches = [];
+
+  people.forEach(function(p) {
+    // Skip TOTAL rows and section headers
+    if (/^total/i.test(p.name)) return;
+    if (/^P[\w\-]+\s+/i.test(p.name)) return;
+
+    var consecutive = 0;
+    var runStart = '';
+    var breachReported = false; // track if we already reported this specific run
+
+    allDates.forEach(function(d) {
+      var raw = p.days[d] || '';
+      var cls = classifyDay(raw);
+      var isWorkOrTravel = cls.type === 'work' || cls.type === 'travel';
+
+      if (isWorkOrTravel) {
+        consecutive++;
+        if (consecutive === 1) runStart = d;
+        // Flag the exact day they cross the threshold
+        if (consecutive === fatigueThreshold + 1 && !breachReported) {
+          // Only include if this breach date falls within the selected range
+          if ((!rFrom || d >= rFrom) && (!rTo || d <= rTo)) {
+            breaches.push({
+              name: p.name,
+              project: p.project,
+              role: p.role,
+              runStart: runStart,
+              exceededOn: d,
+              totalRun: consecutive  // will be updated as run continues
+            });
+          }
+          breachReported = true;
+        }
+        // Update the total run length on the last recorded breach for this run
+        if (breachReported && breaches.length > 0) {
+          var last = breaches[breaches.length - 1];
+          if (last.name === p.name && last.project === p.project && last.runStart === runStart) {
+            last.totalRun = consecutive;
+          }
+        }
+      } else {
+        // Break in consecutive days - reset
+        consecutive = 0;
+        runStart = '';
+        breachReported = false;
+      }
+    });
+  });
+
+  // Sort: longest run first, then by person name
+  breaches.sort(function(a, b) {
+    if (b.totalRun !== a.totalRun) return b.totalRun - a.totalRun;
+    return a.name.localeCompare(b.name);
+  });
+
+  var headers = ['Name', 'Project', 'Role', 'Run started', 'Threshold exceeded on', 'Total consecutive days', 'Days over limit'];
+  var rows = breaches.map(function(b) {
+    return [
+      b.name, b.project, b.role,
+      fmtDate(b.runStart),
+      fmtDate(b.exceededOn),
+      b.totalRun,
+      b.totalRun - fatigueThreshold
+    ];
+  });
+
+  var projLabel = proj === 'ALL' ? 'All projects' : proj;
+  setResultHeader('Fatigue Report — ' + projLabel, breaches.length + ' breach' + (breaches.length !== 1 ? 'es' : '') + ' · threshold: ' + fatigueThreshold + ' consecutive days · ' + rFrom + ' to ' + rTo);
+
+  setMetrics([
+    { label: 'Breaches flagged', val: fmt(breaches.length) },
+    { label: 'People affected', val: fmt(new Set(breaches.map(function(b){return b.name;})).size) },
+    { label: 'Longest run', val: fmt(breaches.length ? breaches[0].totalRun : 0) + ' days' },
+    { label: 'Threshold', val: fatigueThreshold + ' days' }
+  ]);
+
+  document.getElementById('legendBar').innerHTML = '';
+
+  // Colour code by severity
+  var tdCls = function(row, i) {
+    if (i === 0) return 'bv';
+    if (i === 1 || i === 2) return 'muted';
+    if (i === 5) {
+      // total run - colour by severity
+      var days = Number(row[5]);
+      if (days >= 21) return 'num s-sick';
+      if (days >= 18) return 'num tv';
+      return 'num wv';
+    }
+    if (i === 6) return 'num s-sick';
+    if (i >= 3) return 'num';
+    return '';
+  };
+
+  buildTable(headers, rows,
+    ['', '', '', 'num', 'num', 'num', 'num'],
+    tdCls
+  );
+
+  if (!rows.length) {
+    document.getElementById('reportTable').innerHTML = '<tr><td colspan="7" class="empty-row" style="color:#2d7dd2;padding:32px 14px">No fatigue breaches detected for the selected project and date range ✓</td></tr>';
+  }
+
+  exportData = {
+    headers: headers,
+    rows: rows,
+    title: 'Fatigue Report — ' + projLabel,
+    meta: breaches.length + ' breaches | threshold: ' + fatigueThreshold + ' consecutive days | ' + rFrom + ' to ' + rTo
+  };
+}
+
+// ── Table renderer ─────────────────────────────────────────────────
+function buildTable(headers, rows, thClasses, tdClassFn) {
+  var h = '<thead><tr>' + headers.map(function(hdr, i) {
+    var cls = (thClasses && thClasses[i]) ? thClasses[i] : '';
+    return '<th class="' + cls + '">' + hdr.replace(/\n/g,'<br>') + '</th>';
+  }).join('') + '</tr></thead><tbody>';
+  if (!rows.length) { h += '<tr><td colspan="' + headers.length + '" class="empty-row">No data for selected filters</td></tr>'; }
+  rows.forEach(function(row) {
+    h += '<tr>' + row.map(function(v, i) {
+      var cls = tdClassFn ? tdClassFn(row, i) : '';
+      var disp = (v === null || v === undefined || v === '') ? '' : v;
+      return '<td class="' + cls + '">' + disp + '</td>';
+    }).join('') + '</tr>';
+  });
+  document.getElementById('reportTable').innerHTML = h + '</tbody>';
+  document.querySelector('.tbl-wrap table').className = rows.length < 30 ? 'full-w' : '';
+}
+
+function setResultHeader(title, meta) {
+  document.getElementById('resultsTitle').textContent = title;
+  document.getElementById('resultsMeta').textContent = meta;
+  exportData.title = title; exportData.meta = meta;
+  // Clear project legend from previous individual roster if present
+  var el = document.getElementById('projectLegend');
+  if (el) el.remove();
+}
+
+function setMetrics(items) {
+  document.getElementById('metricsBar').innerHTML = items.map(function(m) {
+    return '<div class="metric ' + (m.cls||'') + '"><div class="metric-label">' + m.label + '</div><div class="metric-val">' + m.val + '</div></div>';
+  }).join('');
+}
+
+function setLegend() {
+  document.getElementById('legendBar').innerHTML =
+    '<span><span class="ldot" style="background:#2d7dd2"></span>Work day (project code)</span>' +
+    '<span><span class="ldot" style="background:#e8a838"></span>Travel</span>' +
+    '<span><span class="ldot" style="background:#aaa"></span>RnR</span>' +
+    '<span><span class="ldot" style="background:#9b59b6"></span>Leave/A/L</span>' +
+    '<span><span class="ldot" style="background:#e74c3c"></span>Sick/Injury</span>' +
+    '<span><span class="ldot" style="background:#888"></span>Other</span>';
+}
+
+function renderProjectLegend(projs) {
+  // Build a legend block showing project code -> full name for all projects in scope
+  var items = projs.map(function(code) {
+    var name = projectNames[code] || '';
+    return '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;background:#f0f7ff;border:0.5px solid #ccd9ee;font-size:11px">' +
+      '<b style="color:#2d7dd2">' + code + '</b>' +
+      (name ? '<span style="color:#555">— ' + name + '</span>' : '') +
+      '</span>';
+  });
+  // Add any extra projects found in the data that weren't in selectedProjects
+  // (covers cases where a person's merged days reference a project not in the list)
+  var extra = Object.keys(projectNames).filter(function(k) { return projs.indexOf(k) === -1; });
+  // Only show extras if they actually appear in the result set - skip for now for cleanliness
+  if (!items.length) return;
+  var wrap = document.createElement('div');
+  wrap.id = 'projectLegend';
+  wrap.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;';
+  wrap.innerHTML = '<span style="font-size:11px;color:#aaa;align-self:center;margin-right:2px">Projects:</span>' + items.join('');
+  // Insert before table wrap
+  var tblWrap = document.querySelector('.tbl-wrap');
+  var existing = document.getElementById('projectLegend');
+  if (existing) existing.remove();
+  tblWrap.parentNode.insertBefore(wrap, tblWrap);
+}
+
+function showEmpty(msg) {
+  document.getElementById('reportTable').innerHTML = '<tr><td class="empty-row">' + msg + '</td></tr>';
+}
+
+// ── Exports ────────────────────────────────────────────────────────
+function sf() { return exportData.title.replace(/[^a-zA-Z0-9\s\-_]/g,'').replace(/\s+/g,'_').slice(0,60); }
+
+function exportExcel() {
+  if (!exportData.rows.length) return;
+  var aoa = [
+    [exportData.title],
+    [exportData.meta],
+    ['Generated: ' + new Date().toLocaleDateString('en-AU') + '  |  10.5 hrs/day  |  Work days = 1–50  |  Travel = Fly/Drive In/Out variants'],
+    [],
+    exportData.headers
+  ].concat(exportData.rows);
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = exportData.headers.map(function(h, i) {
+    // wider for name/role/projects, narrow for date cols, medium for summary
+    if (i === 0) return { wch: 24 };
+    if (i === 1 || i === 2) return { wch: 18 };
+    // summary cols at end (last 5)
+    if (i >= exportData.headers.length - 5) return { wch: 14 };
+    return { wch: 9 }; // date columns — narrow like source roster
+  });
+  // Freeze pane using correct SheetJS syntax
+  if (reportType === 'individual' || reportType === 'workforce') {
+    ws['!freeze'] = { xSplit: 3, ySplit: 5, topLeftCell: 'D6', activePane: 'bottomRight', state: 'frozen' };
+  } else {
+    ws['!freeze'] = { xSplit: 0, ySplit: 5, topLeftCell: 'A6', activePane: 'bottomLeft', state: 'frozen' };
+  }
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Report');
+  try {
+    XLSX.writeFile(wb, sf() + '.xlsx');
+  } catch(e) {
+    // Fallback: try without freeze pane
+    delete ws['!freeze'];
+    XLSX.writeFile(wb, sf() + '.xlsx');
+  }
+}
+
+function exportCSV() {
+  if (!exportData.rows.length) return;
+  var lines = [
+    '"' + exportData.title + '"',
+    '"' + exportData.meta + '"',
+    '"Generated: ' + new Date().toLocaleDateString('en-AU') + '"',
+    '',
+    exportData.headers.map(function(h){return '"'+String(h).replace(/\n/g,' — ').replace(/"/g,'""')+'"';}).join(',')
+  ];
+  exportData.rows.forEach(function(r){
+    lines.push(r.map(function(v){return typeof v==='string'?'"'+v.replace(/"/g,'""')+'"':v;}).join(','));
+  });
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'}));
+  a.download=sf()+'.csv'; a.click();
+}
+
+function exportPDF() {
+  if (!exportData.rows.length) return;
+  var doc=new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+  var pw=doc.internal.pageSize.getWidth();
+  doc.setFontSize(13);doc.setFont('helvetica','bold');doc.text(exportData.title,14,15);
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(120);
+  doc.text(exportData.meta,14,21);
+  doc.text('Generated: '+new Date().toLocaleDateString('en-AU')+' | 10.5 hrs/day',pw-14,21,{align:'right'});
+  doc.setTextColor(0);
+  var numCols=exportData.headers.reduce(function(o,h,i){if(i>0)o[i]={halign:'right'};return o;},{});
+  var cleanHeaders=exportData.headers.map(function(h){return String(h).replace(/\n/,' — ');});
+  doc.autoTable({head:[cleanHeaders],body:exportData.rows,startY:26,styles:{fontSize:7,cellPadding:2.5},headStyles:{fillColor:[30,30,30],textColor:255,fontStyle:'bold'},alternateRowStyles:{fillColor:[248,248,248]},columnStyles:numCols,margin:{left:14,right:14}});
+  doc.save(sf()+'.pdf');
+}
+
+function exportWord() {
+  if (!exportData.rows.length) return;
+  var cleanH=exportData.headers.map(function(h){return String(h).replace(/\n/,' — ');});
+  var trs='<tr>'+cleanH.map(function(h){return'<th style="background:#1e1e1e;color:#fff;padding:6px 10px;font-size:9pt;text-align:left">'+h+'</th>';}).join('')+'</tr>';
+  exportData.rows.forEach(function(r,i){
+    trs+='<tr style="background:'+(i%2?'#fff':'#f8f8f8')+'">'+ r.map(function(v){return'<td style="padding:5px 10px;font-size:9pt;border-bottom:0.5pt solid #ddd;text-align:'+(typeof v==='number'?'right':'left')+'">'+v+'</td>';}).join('')+'</tr>';
+  });
+  var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body style="font-family:Calibri,sans-serif;margin:1.5cm"><h1 style="font-size:16pt;margin-bottom:5pt">'+exportData.title+'</h1><p style="font-size:9pt;color:#555;margin-bottom:3pt">'+exportData.meta+'</p><p style="font-size:8pt;color:#999;margin-bottom:3pt">Generated: '+new Date().toLocaleDateString('en-AU')+'</p><p style="font-size:8pt;color:#999;margin-bottom:16pt">10.5 hrs/day &nbsp;|&nbsp; Work days: 1–50 &nbsp;|&nbsp; Travel: Fly/Drive In/Out variants</p><table style="width:100%;border-collapse:collapse">'+trs+'</table></body></html>';
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['\ufeff'+html],{type:'application/msword;charset=utf-8'}));
+  a.download=sf()+'.doc'; a.click();
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Sign-On Generator ──────────────────────────────────────────────
+function SO_triggerDownload(){
+  // no-op — downloads handled via visible <a> links in step 5
+}
+
+// Convert raw bytes (Uint8Array) to a data: URI and trigger download
+// data: URIs work in sandboxed iframes where blob: URLs do not
+function SO_bytesToDataURI(bytes, mime){
+  // Convert Uint8Array to base64 data URI in chunks to avoid stack limits
+  var CHUNK=8192, binary='';
+  for(var i=0;i<bytes.length;i+=CHUNK){
+    binary+=String.fromCharCode.apply(null,bytes.subarray(i,i+CHUNK));
+  }
+  return 'data:'+mime+';base64,'+btoa(binary);
+}
+function launchSignOn() {
+  document.getElementById('wizard').style.display = 'none';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('so_panel').style.display = 'block';
+  document.getElementById('so_ld').style.display = 'none';
+  document.getElementById('so_app').style.display = 'block';
+
+  // Always re-init from the currently loaded workbook
+  SO_S.sd = SO_fD(new Date());
+  SO_S.ed = SO_fD(new Date());
+
+  if (loadedWorkbook) {
+    try {
+      var parsed = SO_parseR(loadedWorkbook);
+      if (parsed.pL.length) {
+        SO_S.sheets = parsed.sheets;
+        SO_S.fn = 'loaded roster';
+        SO_S.pL = parsed.pL;
+        SO_S.step = 1; // skip upload screen, go straight to project selection
+        SO_S.proj = [];
+        SO_render();
+        return;
+      }
+    } catch(e) {
+      SO_sErr('Could not read roster: ' + e.message);
+    }
+  }
+  // Fallback: show upload screen if no workbook loaded
+  SO_S.step = 0;
+  SO_render();
+}
+
+function closeSignOn() {
+  document.getElementById('so_panel').style.display = 'none';
+  document.getElementById('wizard').style.display = 'block';
+  document.querySelectorAll('.rt-btn').forEach(function(b) { b.classList.remove('selected'); });
+  goStep(1);
+}
+
+
+// Minimal ZIP file builder (no dependencies)
+function SO_buildZip(files){
+  // files: [{name:string, data:string}]
+  function strToU8(s){const e=new TextEncoder();return e.encode(s);}
+  function crc32(buf){let c=0xFFFFFFFF;for(let i=0;i<buf.length;i++){c^=buf[i];for(let j=0;j<8;j++)c=c>>>1^(c&1?0xEDB88320:0);}return(c^0xFFFFFFFF)>>>0;}
+  function u16(v){return[v&0xFF,(v>>8)&0xFF];}
+  function u32(v){return[v&0xFF,(v>>8)&0xFF,(v>>16)&0xFF,(v>>24)&0xFF];}
+  const entries=files.map(f=>{const d=strToU8(f.data);const n=strToU8(f.name);return{name:n,data:d,crc:crc32(d)};});
+  const parts=[];let offset=0;const central=[];
+  entries.forEach(e=>{
+    // Local file header
+    const lh=[].concat([0x50,0x4B,0x03,0x04],u16(20),u16(0),u16(0),u16(0),u16(0),u32(e.crc),u32(e.data.length),u32(e.data.length),u16(e.name.length),u16(0));
+    const lhBuf=new Uint8Array(lh);
+    // Central directory entry
+    const cd=[].concat([0x50,0x4B,0x01,0x02],u16(20),u16(20),u16(0),u16(0),u16(0),u16(0),u32(e.crc),u32(e.data.length),u32(e.data.length),u16(e.name.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(offset));
+    central.push({buf:new Uint8Array(cd),name:e.name});
+    parts.push(lhBuf,e.name,e.data);
+    offset+=lhBuf.length+e.name.length+e.data.length;
+  });
+  const cdOffset=offset;let cdSize=0;
+  central.forEach(c=>{parts.push(c.buf,c.name);cdSize+=c.buf.length+c.name.length;});
+  // End of central directory
+  const eocd=[].concat([0x50,0x4B,0x05,0x06],u16(0),u16(0),u16(entries.length),u16(entries.length),u32(cdSize),u32(cdOffset),u16(0));
+  parts.push(new Uint8Array(eocd));
+  let total=0;parts.forEach(p=>total+=p.length);
+  const result=new Uint8Array(total);let pos=0;
+  parts.forEach(p=>{result.set(p,pos);pos+=p.length;});
+  return result;
+}
+
+const SO_SK=["dra tanks","fleurieu fire","fleurieu","fencewright","outback trees","dream courts","all seasons turf","mobe crete","crane corp","pilbara networks","wormald","pca comms","hedland harbour","radlink","nwmc","elite compliance","fuel -"];
+const SO_RC={"Con Roster 20251201":{dsc:16,rc:12,lb:"Con"},"Mnt Roster20251210":{dsc:13,rc:11,lb:"Mnt"}};
+let SO_S={step:0,sheets:null,fn:"",pL:[],proj:[],rt:"both",sm:"include",fmt:"pdf",sd:"",ed:"",single:true,pmO:"",saO:"",pv:null,res:null};
+const SO_isS=r=>SO_SK.some(k=>(r||"").toLowerCase().includes(k));
+const SO_fxC=s=>s===s.toUpperCase()&&s.length>2?s[0]+s.slice(1).toLowerCase():s;
+const SO_fD=d=>`${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+const SO_dL=d=>{const D=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"],M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];return`${D[d.getDay()]} ${String(d.getDate()).padStart(2,"0")} ${M[d.getMonth()]} ${d.getFullYear()}`;};
+const SO_pD=s=>{const p=s.split("/").map(Number);return p.length===3&&p[0]&&p[1]&&p[2]?new Date(p[2],p[1]-1,p[0]):null;};
+const SO_s2d=n=>{if(typeof n!=="number")return null;const d=new Date((n-25569)*86400000);return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());};
+
+function SO_parseR(wb){
+  const proj={},sheets={};
+  for(const[nm,cf]of Object.entries(SO_RC)){const ws=wb.Sheets[nm];if(!ws)continue;const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:"",raw:true}),dm={},r3=data[2]||[];for(let c=cf.dsc;c<r3.length;c++){const d=SO_s2d(r3[c]);if(d&&d.getFullYear()>=2024&&d.getFullYear()<=2030)dm[`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`]=c;}sheets[nm]={data,cfg:cf,dm};for(let r=3;r<data.length;r++){const p=String(data[r]?.[3]||"").trim().replace(/\u00a0/g,"");if(p&&p!=="Project"){if(!proj[p])proj[p]=new Set();proj[p].add(cf.lb);}}}
+  return{sheets,pL:Object.keys(proj).sort().map(p=>({code:p,rosters:[...proj[p]].sort().join(" + ")}))};
+}
+function SO_getS(si,date,project,sm){
+  const{data,cfg,dm}=si,tc=dm[`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`];if(tc===undefined)return[];const staff=[];
+  for(let r=3;r<data.length;r++){const row=data[r]||[];if(String(row[3]||"").trim().replace(/\u00a0/g,"")!==project)continue;const ln=String(row[8]||"").trim().replace(/\u00a0/g,""),fn=String(row[9]||"").trim().replace(/\u00a0/g,"");if(!ln||!fn)continue;const ph=String(row[10]||"").trim().replace(/\u00a0/g,""),rl=String(row[cfg.rc]||"").trim().replace(/\u00a0/g,"");if(sm==="exclude"&&SO_isS(rl))continue;if(sm==="only"&&!SO_isS(rl))continue;const rv=row[tc],dv=String(rv==null?"":rv).trim().replace(/\u00a0/g,"");
+    const num=parseInt(dv,10);
+    if(!isNaN(num)&&num>=1&&num<=50)staff.push({sn:SO_fxC(ln),fn:SO_fxC(fn),ph,rl:SO_fxC(rl)});}
+  return staff;
+}
+
+function SO_mkPDF(project,date,pm,safety,staff,existingDoc){
+  const{jsPDF}=window.jspdf;
+  const doc=existingDoc||new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  if(existingDoc)doc.addPage();
+  const W=210,M=7,R=W-M;
+  // Column widths proportional: No(4%), Name(21%), SigStart(14%), Phone(10%), Position(13%), BAC#(7%), BACResult(8%), SigOff(14%), Time(9%)
+  const CW=R-M,pr=[.04,.21,.14,.10,.13,.07,.08,.14,.09],ws=pr.map(p=>CW*p);
+  const cx=[M];for(let i=0;i<8;i++)cx.push(cx[i]+ws[i]);
+  const OG=[230,177,125];
+  let y=M;
+
+  function drawRow(yy,h,cells,opts){
+    opts=opts||{};
+    for(let i=0;i<9;i++){
+      const x1=cx[i],w=ws[i];
+      if(opts.fill){doc.setFillColor(...opts.fill);doc.rect(x1,yy,w,h,"FD");}else{doc.rect(x1,yy,w,h);}
+    }
+    if(cells)cells.forEach(([col,txt,sz,bold,clr])=>{
+      doc.setFontSize(sz||9);doc.setFont("helvetica",bold?"bold":"normal");
+      if(clr)doc.setTextColor(...clr);else doc.setTextColor(0);
+      // Handle merged cells: if col is [start,end], center across those
+      let x1,x2;
+      if(Array.isArray(col)){x1=cx[col[0]];x2=cx[col[1]]+ws[col[1]];}else{x1=cx[col];x2=cx[col]+ws[col];}
+      const lines=doc.splitTextToSize(txt,x2-x1-2);
+      const lh=sz*0.35||3.2;const ty=yy+h/2-(lines.length-1)*lh/2+1;
+      lines.forEach((l,j)=>doc.text(l,(x1+x2)/2,ty+j*lh,{align:"center"}));
+    });
+    doc.setTextColor(0);
+  }
+
+  // Title
+  doc.setFontSize(13);doc.setFont("helvetica","bold");
+  doc.text("APC Daily Prestart / Notes",W/2,y+5,{align:"center"});
+  y+=9;
+
+  // Header fields
+  const hf=[["Project",project],["Date",SO_dL(date)],["Project Manager / Supervisor",pm],["Safety Advisor (s)",safety],["No Of Staff",String(staff.length)]];
+  hf.forEach(([lb,vl])=>{
+    doc.setLineWidth(0.3);doc.setDrawColor(0);
+    doc.rect(M,y,65,6.5);doc.rect(M+65,y,CW-65,6.5);
+    doc.setFontSize(10);doc.setFont("helvetica","bold");doc.text(lb,M+2,y+4.5);
+    doc.setFontSize(12);doc.text(vl,M+68,y+4.5);
+    y+=6.5;
+  });
+
+  // Orange declaration bars
+  doc.setLineWidth(0.3);
+  doc.setFillColor(...OG);doc.rect(M,y,CW,5,"FD");
+  doc.setFontSize(7);doc.setFont("helvetica","normal");doc.setTextColor(0);
+  doc.text("PERSONS PRESENT - I acknowledge and understand any site specific hazards and control measures that may affect me",W/2,y+3.5,{align:"center"});
+  y+=5;
+  doc.setFillColor(...OG);doc.rect(M,y,CW*0.52,5,"FD");doc.rect(M+CW*0.52,y,CW*0.48,5,"FD");
+  doc.setFontSize(6.5);
+  doc.text("*I declare that I am fit for work and free of injury or illness (Sign On)",M+CW*0.26,y+3.5,{align:"center"});
+  doc.text("*I declare that I am free from injury or illness (Sign Off)",M+CW*0.52+CW*0.24,y+3.5,{align:"center"});
+  y+=5;
+
+  // Column headers
+  const hd=["No.","Name","Signature\nStart","Phone","Position","BAC#","BAC\nResult","Signature\nOff","Time\nSign Off"];
+  doc.setLineWidth(0.4);
+  const hh=8;
+  for(let i=0;i<9;i++){
+    doc.rect(cx[i],y,ws[i],hh);
+    doc.setFontSize(7);doc.setFont("helvetica","bold");
+    const lines=hd[i].split("\n"),ly=lines.length===1?y+hh/2+1:y+hh/2-1;
+    lines.forEach((l,j)=>doc.text(l,cx[i]+ws[i]/2,ly+j*3,{align:"center"}));
+  }
+  y+=hh;
+
+  // Staff rows
+  const rh=7.5,minRows=staff.length+6;
+  function staffRow(num,s,yy){
+    doc.setLineWidth(0.3);
+    for(let i=0;i<9;i++)doc.rect(cx[i],yy,ws[i],rh);
+    doc.setFont("helvetica","bold");doc.setFontSize(8);
+    doc.text(String(num),cx[0]+ws[0]/2,yy+rh/2+1,{align:"center"});
+    if(s){
+      doc.setFont("helvetica","normal");doc.setFontSize(8);
+      doc.text(s.fn+" "+s.sn,cx[1]+ws[1]/2,yy+rh/2+1,{align:"center"});
+      doc.setFontSize(6.5);
+      doc.text(s.ph,cx[3]+ws[3]/2,yy+rh/2+1,{align:"center"});
+      doc.setFontSize(5.5);
+      const posLines=doc.splitTextToSize(s.rl,ws[4]-2);
+      const pty=posLines.length===1?yy+rh/2+1:yy+rh/2-0.5;
+      posLines.forEach((l,j)=>doc.text(l,cx[4]+ws[4]/2,pty+j*2.5,{align:"center"}));
+    }
+  }
+
+  const pageBot=297-8; // bottom margin
+  function checkPage(needed){
+    if(y+needed>pageBot){doc.addPage();y=M;}
+  }
+  function reprintHdr(){
+    doc.setLineWidth(0.4);
+    for(let j=0;j<9;j++){doc.rect(cx[j],y,ws[j],hh);doc.setFontSize(7);doc.setFont("helvetica","bold");const lines=hd[j].split("\n"),ly=lines.length===1?y+hh/2+1:y+hh/2-1;lines.forEach((l,k)=>doc.text(l,cx[j]+ws[j]/2,ly+k*3,{align:"center"}));}
+    y+=hh;
+  }
+  for(let i=0;i<minRows;i++){
+    if(y+rh>pageBot){
+      doc.addPage();y=M;
+      reprintHdr();
+    }
+    staffRow(i+1,staff[i]||null,y);y+=rh;
+  }
+
+  // Testing section
+  checkPage(6+rh*3+4);
+  y+=2;doc.setLineWidth(0.3);
+  doc.setFillColor(220,220,220);
+  // Header row with merged columns matching template: Ser(A) | Name(B) | Test Type - Hydro / AOD (C:F merged) | Test Result(G) | Retest(H) | Retest(I)
+  const tx0=cx[0],tx1=cx[0]+ws[0],tx2=cx[1]+ws[1],tx6=cx[6],tx7=cx[7],tx8=cx[8],txR=cx[8]+ws[8];
+  doc.rect(tx0,y,ws[0],6,"FD"); // Ser
+  doc.rect(tx1,y,ws[1],6,"FD"); // Name
+  doc.rect(tx2,y,tx6-tx2,6,"FD"); // Test Type merged
+  doc.rect(tx6,y,ws[6],6,"FD"); // Test Result
+  doc.rect(tx7,y,ws[7],6,"FD"); // Retest
+  doc.rect(tx8,y,ws[8],6,"FD"); // Retest
+  doc.setFontSize(7);doc.setFont("helvetica","bold");doc.setTextColor(0);
+  doc.text("Ser",tx0+ws[0]/2,y+4,{align:"center"});
+  doc.text("Name",tx1+ws[1]/2,y+4,{align:"center"});
+  doc.text("Test Type - Hydro / AOD",(tx2+tx6)/2,y+4,{align:"center"});
+  doc.text("Test Result",tx6+ws[6]/2,y+4,{align:"center"});
+  doc.text("Retest",tx7+ws[7]/2,y+4,{align:"center"});
+  doc.text("Retest",tx8+ws[8]/2,y+4,{align:"center"});
+  y+=6;
+  for(let i=0;i<3;i++){
+    doc.rect(tx0,y,ws[0],rh);doc.rect(tx1,y,ws[1],rh);doc.rect(tx2,y,tx6-tx2,rh);doc.rect(tx6,y,ws[6],rh);doc.rect(tx7,y,ws[7],rh);doc.rect(tx8,y,ws[8],rh);
+    doc.setFontSize(8);doc.setFont("helvetica","bold");doc.text(String(i+1),tx0+ws[0]/2,y+rh/2+1,{align:"center"});y+=rh;
+  }
+
+  // Incident section
+  checkPage(6+6+rh*5+4);
+  y+=2;
+  doc.setFillColor(255,230,230);doc.setTextColor(238,0,0);
+  doc.rect(M,y,CW,6,"FD");doc.setFontSize(9);doc.setFont("helvetica","bold");
+  doc.text("APC Incident Notifications",W/2,y+4,{align:"center"});y+=6;
+  doc.setFillColor(255,230,230);
+  // Header: Project(A:B merged) | Title(C:G merged) | Reference Number(H:I merged)
+  const ix0=cx[0],ix2=cx[2],ix7=cx[7],ixR=cx[8]+ws[8];
+  doc.rect(ix0,y,cx[2]-ix0,6,"FD"); // Project
+  doc.rect(ix2,y,ix7-ix2,6,"FD"); // Title
+  doc.rect(ix7,y,ixR-ix7,6,"FD"); // Reference Number
+  doc.setFontSize(7);
+  doc.text("Project",(ix0+ix2)/2,y+4,{align:"center"});
+  doc.text("Title",(ix2+ix7)/2,y+4,{align:"center"});
+  doc.text("Reference Number",(ix7+ixR)/2,y+4,{align:"center"});
+  y+=6;
+  for(let i=0;i<5;i++){
+    doc.rect(ix0,y,cx[2]-ix0,rh);doc.rect(ix2,y,ix7-ix2,rh);doc.rect(ix7,y,ixR-ix7,rh);
+    doc.setFontSize(8);doc.text(String(i+1),(ix0+ix2)/2,y+rh/2+1,{align:"center"});y+=rh;
+  }
+
+  doc.setTextColor(0);
+  return doc;
+}
+
+function SO_sErr(m){const e=document.getElementById("so_eBox");e.textContent=m;e.style.display=m?"block":"none";}
+function SO_rSteps(){const lb=["Project","Options","Dates","Generate"];let h="";lb.forEach((t,i)=>{const active=i===SO_S.step-1,done=i<SO_S.step-1;h+=`<div class="step ${active?'active':done?'done':''}"><span class="step-num">${i+1}</span>${t}</div>`;});document.getElementById("so_sBar").innerHTML=h;document.getElementById("so_soBtn").style.display=SO_S.step>0?"block":"none";}
+
+function SO_render(){
+  SO_rSteps();SO_sErr("");const el=document.getElementById("so_cnt");
+  if(SO_S.step===0){
+    // Step 0 is the upload screen — shown only if no roster is loaded in the analyser
+    el.innerHTML=`<div class="cd"><div class="ct">Upload APC Roster Master</div><div class="cs">No roster loaded — upload the file to continue</div><div class="drop" id="so_dz" style="border-color:#ccc;background:#f9fafb"><div style="font-size:40px;margin-bottom:10px">📋</div><div style="font-size:15px;font-weight:600;margin-bottom:6px">Drop .xlsx file here</div><div style="font-size:12px;color:#999;margin-bottom:14px">or use the button below</div><input type="file" id="so_fi" accept=".xlsx,.xls" style="font-size:13px;color:#555;background:#fff;border:0.5px solid #ccc;border-radius:8px;padding:9px 18px;cursor:pointer"></div></div>`;
+    document.getElementById("so_fi").addEventListener("change",function(e){SO_hUpload(e);});
+    const dz=document.getElementById("so_dz");
+    dz.ondragover=e=>{e.preventDefault();dz.style.borderColor="#10b981";};
+    dz.ondragleave=()=>{dz.style.borderColor="#ccc";};
+    dz.ondrop=e=>{e.preventDefault();dz.style.borderColor="#ccc";SO_hUpload({target:{files:e.dataTransfer.files}});};
+  }else if(SO_S.step===1){
+    el.innerHTML=`<div class="cd"><div class="ct">Select Projects</div><div class="cs">${SO_S.pL.length} projects in ${SO_S.fn} — select one or more</div><div class="fx fw g8" id="so_pBtns">${SO_S.pL.map(p=>`<button class="pb${SO_S.proj.includes(p.code)?" pba":""}" data-p="${p.code}" onclick="SO_togProj('${p.code}')">${p.code}<span>(${p.rosters})</span></button>`).join("")}</div><div style="height:20px"></div><button class="btn bp" id="so_pCont" onclick="if(SO_S.proj.length){SO_S.step=2;SO_render();}else{SO_sErr('Select at least one project.');}" ${SO_S.proj.length?"":"disabled"}>Continue with ${SO_S.proj.length||0} project${SO_S.proj.length!==1?"s":""} →</button></div>`;
+  }else if(SO_S.step===2){
+    el.innerHTML=`<div class="cd"><div class="ct">Options</div><div class="cs">Projects: ${SO_S.proj.join(", ")}</div><div class="lb">Roster</div><div class="rg" id="so_rR"></div><div style="height:16px"></div><div class="lb">Subcontractors</div><div class="rg" id="so_rS"></div><div style="height:16px"></div><div class="lb">Output Format</div><div class="rg" id="so_rF"></div><div style="height:20px"></div><button class="btn bp" onclick="SO_S.step=3;SO_render()">Continue →</button></div>`;
+    SO_rRG("so_rR",SO_S.rt,[["con","Construction / Production"],["mnt","Maintenance"],["both","Both Combined"]],v=>{SO_S.rt=v;SO_render();});
+    SO_rRG("so_rS",SO_S.sm,[["include","Include All"],["exclude","Exclude Subs"],["only","Subs Only"]],v=>{SO_S.sm=v;SO_render();});
+    SO_rRG("so_rF",SO_S.fmt,[["pdf","PDF"],["xlsx","Excel (.xlsx)"],["docx","Word (.docx)"],["html","Print / HTML"]],v=>{SO_S.fmt=v;SO_render();});
+  }else if(SO_S.step===3){
+    el.innerHTML=`<div class="cd"><div class="ct">Select Dates</div><div class="cs">Projects: ${SO_S.proj.join(", ")}</div><div class="rg" id="so_rM"></div><div style="height:16px"></div><div class="fx g12"><div class="f1"><div class="lb">${SO_S.single?"Date":"Start Date"}</div><input type="text" id="so_sdI" placeholder="dd/mm/yyyy" value="${SO_S.sd}"></div><div class="f1" id="edW" style="display:${SO_S.single?"none":"block"}"><div class="lb">End Date</div><input type="text" id="so_edI" placeholder="dd/mm/yyyy" value="${SO_S.ed}"></div></div><div style="height:20px"></div><button class="btn bp" onclick="SO_doPV()">Continue →</button></div>`;
+    SO_rRG("so_rM",SO_S.single?"s":"r",[["s","Single Day"],["r","Date Range"]],v=>{SO_S.single=v==="s";SO_render();});
+  }else if(SO_S.step===4&&SO_S.pv){
+    let cards=SO_S.pv.map(d=>`<div class="cd"><div class="ct">${d.label}</div><div class="cs">${d.staff.length} staff</div><div class="fx fw">${d.staff.map(s=>`<span class="tag">${s.fn} ${s.sn} <span>• ${s.rl}</span></span>`).join("")}</div></div>`).join("");
+    el.innerHTML=`<div class="cd"><div class="ct">Review & Generate</div><div class="g2"><div class="si"><div class="sil">Project(s)</div><div class="siv">${SO_S.proj.join(", ")}</div></div><div class="si"><div class="sil">Roster</div><div class="siv">${SO_S.rt==="both"?"Both":SO_S.rt==="con"?"Construction":"Maintenance"}</div></div><div class="si"><div class="sil">Subcontractors</div><div class="siv">${SO_S.sm==="include"?"All Included":SO_S.sm==="exclude"?"Excluded":"Subs Only"}</div></div><div class="si"><div class="sil">Date(s)</div><div class="siv">${SO_S.single?SO_S.sd:SO_S.sd+" → "+SO_S.ed}</div></div><div class="si"><div class="sil">Format</div><div class="siv">${SO_S.fmt==="pdf"?"PDF":SO_S.fmt==="xlsx"?"Excel (.xlsx)":SO_S.fmt==="docx"?"Word (.docx)":"Print / HTML"}</div></div></div>
+    <div class="lb">Project Manager / Supervisor <span style="color:#fca5a5">*</span></div><input type="text" id="so_pmI" placeholder="Enter name" value="${SO_S.pmO}"><div style="height:12px"></div><div class="lb">Safety Advisor <span style="color:#fca5a5">*</span></div><input type="text" id="so_saI" placeholder="Enter name" value="${SO_S.saO}"><div style="height:24px"></div>
+    <div class="fx g12"><button class="btn bs" onclick="SO_S.step=3;SO_render()">← Back</button><button class="btn bg" id="so_gB" onclick="SO_doGen()">Generate Sign-On Sheet</button></div></div>${cards}`;
+  }else if(SO_S.step===5&&SO_S.res){
+    const r=SO_S.res;
+    const dlFile=r.files[0];
+    let dls;
+    if(dlFile.mode==='pdf'){
+      // jsPDF .save() fires immediately — just show confirmation
+      dls=`<div style="background:#0a2010;border:1px solid #14532d;border-radius:8px;padding:14px 18px;font-size:13px;color:#86efac;margin:4px 4px 8px">
+        ✓ PDF downloading — check your Downloads folder<br><span style="font-size:11px;opacity:.7">${dlFile.fn}</span>
+      </div>`;
+    }else if(dlFile.mode==='html'){
+      dls=`<button class="dl" onclick="SO_doGen()">↗ Re-open in new tab</button>
+      <div style="font-size:11px;color:#64748b;margin-top:8px">Use <b>Ctrl+P</b> (⌘+P on Mac) to print or save as PDF.</div>`;
+    }else{
+      // Excel or Word — render a visible <a> with data URI the user clicks directly
+      dls=`<a href="${dlFile.uri}" download="${dlFile.fn}" class="dl">⬇ Download ${dlFile.fn}</a>
+      <div style="font-size:11px;color:#64748b;margin-top:8px">Click the button above to save the file.</div>`;
+    }
+    let cards=r.daily.map(d=>`<div class="cd"><div class="ct">${d.label}</div><div class="cs">${d.staff.length} staff • PM: ${d.pm} • Safety: ${d.safety}</div><div class="fx fw">${d.staff.map(s=>`<span class="tag">${s.fn} ${s.sn} <span>• ${s.rl}</span></span>`).join("")}</div></div>`).join("");
+    el.innerHTML=`<div class="ok"><div style="font-size:40px;margin-bottom:8px">✅</div><div style="font-size:18px;font-weight:600;color:#10b981;margin-bottom:4px">Sign-On Sheets Ready</div><div style="font-size:14px;color:#94a3b8;margin-bottom:16px">${r.daily.length} day${r.daily.length>1?"s":""} • ${r.daily.reduce((s,d)=>s+d.staff.length,0)} total staff • ${SO_S.fmt==="pdf"?"PDF":SO_S.fmt==="xlsx"?"Excel":SO_S.fmt==="docx"?"Word":"Print / HTML"}${r.daily.length>1?" (all days in one file)":""}</div>${dls}</div>${cards}<div class="fx g8 mt8"><button class="btn bs f1" onclick="SO_rKeep()">Same Roster, New Project</button><button class="btn bs f1" onclick="SO_resetAll()">Upload New Roster</button></div>`;
+  }
+}
+
+function SO_rRG(id,val,opts,cb){const el=document.getElementById(id);if(!el)return;el.innerHTML=opts.map(([v,l])=>`<button class="${v===val?"a":""}" data-v="${v}">${l}</button>`).join("");el.querySelectorAll("button").forEach(b=>b.onclick=()=>cb(b.dataset.v));}
+
+async function SO_hUpload(e){
+  const f=e.target.files?.[0];if(!f)return;
+  try{
+    if(typeof XLSX==="undefined"){SO_sErr("SheetJS library failed to load. Check internet connection.");return;}
+    const d=await f.arrayBuffer();
+    const w=XLSX.read(d,{type:"array",cellDates:false,raw:true});
+    const{pL,sheets}=SO_parseR(w);
+    if(!pL.length){SO_sErr("No projects found. Sheets: "+w.SheetNames.join(", "));SO_S.step=0;SO_render();return;}
+    SO_S.sheets=sheets;SO_S.fn=f.name;SO_S.pL=pL;SO_S.step=1;SO_render();
+  }catch(x){SO_sErr("Error: "+x.message);SO_S.step=0;SO_render();}
+}
+
+function SO_doPV(){
+  SO_S.sd=document.getElementById("so_sdI")?.value||SO_S.sd;SO_S.ed=document.getElementById("so_edI")?.value||SO_S.ed;
+  const s=SO_pD(SO_S.sd),e=SO_S.single?s:SO_pD(SO_S.ed);
+  if(!s||!e){SO_sErr("Invalid date. Use dd/mm/yyyy.");return;}if(e<s){SO_sErr("End date must be after start.");return;}if(Math.ceil((e-s)/864e5)+1>14){SO_sErr("Max 14 days.");return;}
+  const use=Object.entries(SO_S.sheets).filter(([,si])=>{if(SO_S.rt==="con"&&si.cfg.lb!=="Con")return false;if(SO_S.rt==="mnt"&&si.cfg.lb!=="Mnt")return false;return true;});
+  const dates=[];for(const c=new Date(s);c<=e;c.setDate(c.getDate()+1))dates.push(new Date(c));
+  SO_S.pv=dates.map(date=>{
+    const all=[],seen=new Set();for(const[,sh]of use)for(const pr of SO_S.proj)for(const st of SO_getS(sh,date,pr,SO_S.sm)){const k=`${st.fn.toLowerCase()}_${st.sn.toLowerCase()}`;if(!seen.has(k)){seen.add(k);all.push(st);}}
+    all.sort((a,b)=>a.fn.toLowerCase().localeCompare(b.fn.toLowerCase()));
+    const pmL=all.filter(s=>(s.rl.toLowerCase().includes("manager")||s.rl.toLowerCase().includes("supervisor"))&&!s.rl.toLowerCase().includes("contract")).map(s=>`${s.fn} ${s.sn}`);
+    const saL=all.filter(s=>s.rl.toLowerCase().includes("safety")).map(s=>`${s.fn} ${s.sn}`);
+    return{date,label:SO_dL(date),staff:all,pm:pmL[0]||"TBC",safety:saL[0]||"TBC"};
+  });
+  SO_S.step=4;SO_render();
+}
+
+function SO_mkXLSX(project,days,pm,safety){
+  const x=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="6">
+<font><sz val="10"/><name val="Arial"/></font>
+<font><b/><sz val="10"/><name val="Arial"/></font>
+<font><b/><sz val="13"/><name val="Arial"/></font>
+<font><sz val="8"/><name val="Arial"/></font>
+<font><b/><sz val="12"/><name val="Arial"/></font>
+<font><b/><sz val="10"/><color rgb="FFEE0000"/><name val="Arial"/></font>
+</fonts>
+<fills count="5">
+<fill><patternFill patternType="none"/></fill>
+<fill><patternFill patternType="gray125"/></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFE6B17D"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFFFE6E6"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFDDDDDD"/></patternFill></fill>
+</fills>
+<borders count="2">
+<border><left/><right/><top/><bottom/><diagonal/></border>
+<border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border>
+</borders>
+<cellXfs count="14">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
+<xf numFmtId="0" fontId="1" fillId="0" borderId="1" applyBorder="1" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="1" fillId="0" borderId="1" applyBorder="1" applyFont="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="1" applyBorder="1" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="3" fillId="2" borderId="1" applyBorder="1" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="1" applyBorder="1" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="1" fillId="0" borderId="1" applyBorder="1" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="4" fillId="0" borderId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="3" fillId="2" borderId="1" applyBorder="1" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="5" fillId="0" borderId="1" applyBorder="1" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="5" fillId="3" borderId="1" applyBorder="1" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="1" fillId="4" borderId="1" applyBorder="1" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="1" applyBorder="1" applyFont="1" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf>
+</cellXfs>
+</styleSheet>`;
+
+  function colLetter(c){let s="";c++;while(c>0){c--;s=String.fromCharCode(65+c%26)+s;c=Math.floor(c/26);}return s;}
+  function cell(r,c,val,style){
+    const ref=colLetter(c)+(r+1);
+    if(val==null||val==="")return`<c r="${ref}" s="${style||0}"/>`;
+    if(typeof val==="number")return`<c r="${ref}" s="${style||0}"><v>${val}</v></c>`;
+    return`<c r="${ref}" s="${style||0}" t="inlineStr"><is><t>${x(val)}</t></is></c>`;
+  }
+  // Generate empty bordered cells for a range
+  function emptyCells(r,from,to,style){let s="";for(let c=from;c<=to;c++)s+=cell(r,c,"",style);return s;}
+
+  const zipFiles=[];
+  const sheetNames=[];
+  const sheetXmls=[];
+
+  days.forEach((day,di)=>{
+    const label=`${String(day.date.getDate()).padStart(2,"0")}-${String(day.date.getMonth()+1).padStart(2,"0")}`;
+    sheetNames.push(label);
+    let sd="",merges=[];
+    let r=0;
+    // Title row - merge A:I
+    sd+=`<row r="${r+1}" ht="25" customHeight="1">${cell(r,0,"APC Daily Prestart / Notes",8)}${emptyCells(r,1,8,0)}</row>`;
+    merges.push(`A${r+1}:I${r+1}`);r++;
+    // Header fields: label in A:C (merged, style 2=bold left border), value in D:I (merged, style 3=13pt bold center border)
+    const hf=[["Project",project],["Date",SO_dL(day.date)],["Project Manager / Supervisor",pm],["Safety Advisor (s)",safety],["No Of Staff",String(day.staff.length)]];
+    hf.forEach(([lb,vl])=>{
+      sd+=`<row r="${r+1}" ht="25" customHeight="1">${cell(r,0,lb,2)}${cell(r,1,"",2)}${cell(r,2,"",2)}${cell(r,3,vl,3)}${cell(r,4,"",3)}${cell(r,5,"",3)}${cell(r,6,"",3)}${cell(r,7,"",3)}${cell(r,8,"",3)}</row>`;
+      merges.push(`A${r+1}:C${r+1}`);merges.push(`D${r+1}:I${r+1}`);r++;
+    });
+    // Orange declaration full width
+    sd+=`<row r="${r+1}" ht="25" customHeight="1">${cell(r,0,"PERSONS PRESENT - I acknowledge and understand any site specific hazards and control measures that may affect me",4)}${emptyCells(r,1,8,4)}</row>`;
+    merges.push(`A${r+1}:I${r+1}`);r++;
+    // Split declaration
+    sd+=`<row r="${r+1}" ht="25" customHeight="1">${cell(r,0,"*I declare that I am fit for work and free of injury or illness (Sign On)",9)}${emptyCells(r,1,4,9)}${cell(r,5,"*I declare that I am free from injury or illness (Sign Off)",9)}${emptyCells(r,6,8,9)}</row>`;
+    merges.push(`A${r+1}:E${r+1}`);merges.push(`F${r+1}:I${r+1}`);r++;
+    // Column headers
+    const hd=["No.","Name","Signature Start","Phone","Position","BAC#","BAC Result","Signature Off","Time Sign Off"];
+    sd+=`<row r="${r+1}" ht="25" customHeight="1">${hd.map((h,i)=>cell(r,i,h,1)).join("")}</row>`;r++;
+    // Staff rows + 6 blank
+    const total=day.staff.length+6;
+    for(let i=0;i<total;i++){
+      const s=day.staff[i];
+      sd+=`<row r="${r+1}" ht="25" customHeight="1">${cell(r,0,i+1,7)}${cell(r,1,s?s.fn+" "+s.sn:"",5)}${cell(r,2,"",5)}${cell(r,3,s?s.ph:"",6)}${cell(r,4,s?s.rl:"",6)}${cell(r,5,"",5)}${cell(r,6,"",5)}${cell(r,7,"",5)}${cell(r,8,"",5)}</row>`;
+      r++;
+    }
+    // Blank separator
+    sd+=`<row r="${r+1}" ht="6" customHeight="1"/>`;r++;
+    // Testing header - s12=grey fill bold center border
+    sd+=`<row r="${r+1}" ht="25" customHeight="1">${cell(r,0,"Ser",12)}${cell(r,1,"Name",12)}${cell(r,2,"Test Type - Hydro / AOD",12)}${cell(r,3,"",12)}${cell(r,4,"",12)}${cell(r,5,"",12)}${cell(r,6,"Test Result",12)}${cell(r,7,"Retest",12)}${cell(r,8,"Retest",12)}</row>`;
+    merges.push(`C${r+1}:F${r+1}`);r++;
+    for(let i=0;i<3;i++){
+      sd+=`<row r="${r+1}" ht="25" customHeight="1">${cell(r,0,i+1,7)}${cell(r,1,"",5)}${cell(r,2,"",5)}${cell(r,3,"",5)}${cell(r,4,"",5)}${cell(r,5,"",5)}${cell(r,6,"",5)}${cell(r,7,"",5)}${cell(r,8,"",5)}</row>`;
+      merges.push(`C${r+1}:F${r+1}`);r++;
+    }
+    // Blank separator
+    sd+=`<row r="${r+1}" ht="6" customHeight="1"/>`;r++;
+    // Incident title
+    sd+=`<row r="${r+1}" ht="25" customHeight="1">${cell(r,0,"APC Incident Notifications",11)}${emptyCells(r,1,8,11)}</row>`;
+    merges.push(`A${r+1}:I${r+1}`);r++;
+    // Incident header
+    sd+=`<row r="${r+1}" ht="25" customHeight="1">${cell(r,0,"Project",11)}${cell(r,1,"",11)}${cell(r,2,"Title",11)}${cell(r,3,"",11)}${cell(r,4,"",11)}${cell(r,5,"",11)}${cell(r,6,"",11)}${cell(r,7,"Reference Number",11)}${cell(r,8,"",11)}</row>`;
+    merges.push(`A${r+1}:B${r+1}`);merges.push(`C${r+1}:G${r+1}`);merges.push(`H${r+1}:I${r+1}`);r++;
+    for(let i=0;i<5;i++){
+      sd+=`<row r="${r+1}" ht="25" customHeight="1">${cell(r,0,i+1,10)}${cell(r,1,"",10)}${cell(r,2,"",5)}${cell(r,3,"",5)}${cell(r,4,"",5)}${cell(r,5,"",5)}${cell(r,6,"",5)}${cell(r,7,"",5)}${cell(r,8,"",5)}</row>`;
+      merges.push(`A${r+1}:B${r+1}`);merges.push(`C${r+1}:G${r+1}`);merges.push(`H${r+1}:I${r+1}`);r++;
+    }
+
+    let mg=merges.length?`<mergeCells count="${merges.length}">${merges.map(m=>`<mergeCell ref="${m}"/>`).join("")}</mergeCells>`:"";
+
+    const sheetXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>
+<cols><col min="1" max="1" width="5" customWidth="1"/><col min="2" max="2" width="24" customWidth="1"/><col min="3" max="3" width="16" customWidth="1"/><col min="4" max="4" width="13" customWidth="1"/><col min="5" max="5" width="16" customWidth="1"/><col min="6" max="6" width="8" customWidth="1"/><col min="7" max="7" width="10" customWidth="1"/><col min="8" max="8" width="16" customWidth="1"/><col min="9" max="9" width="13" customWidth="1"/></cols>
+<sheetData>${sd}</sheetData>
+${mg}
+<pageMargins left="0.4" right="0.4" top="0.4" bottom="0.4" header="0.2" footer="0.2"/>
+<pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="999"/>
+</worksheet>`;
+    sheetXmls.push(sheetXml);
+  });
+
+  const ct=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+${sheetNames.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}
+</Types>`;
+  const wbXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets>${sheetNames.map((n,i)=>`<sheet name="${x(n)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join("")}</sheets>
+</workbook>`;
+  const wbRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${sheetNames.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join("")}
+<Relationship Id="rId${sheetNames.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
+  const rootRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`;
+
+  zipFiles.push({name:"[Content_Types].xml",data:ct});
+  zipFiles.push({name:"_rels/.rels",data:rootRels});
+  zipFiles.push({name:"xl/workbook.xml",data:wbXml});
+  zipFiles.push({name:"xl/_rels/workbook.xml.rels",data:wbRels});
+  zipFiles.push({name:"xl/styles.xml",data:styles});
+  sheetXmls.forEach((sx,i)=>zipFiles.push({name:`xl/worksheets/sheet${i+1}.xml`,data:sx}));
+  const zipBuf=SO_buildZip(zipFiles);
+  return zipBuf; // Uint8Array
+}
+
+function SO_mkDOCX(project,days,pm,safety){
+  const x=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const bdr='<w:tcBorders><w:top w:val="single" w:sz="6" w:color="000000"/><w:bottom w:val="single" w:sz="6" w:color="000000"/><w:left w:val="single" w:sz="6" w:color="000000"/><w:right w:val="single" w:sz="6" w:color="000000"/></w:tcBorders>';
+  function tc(txt,w,opts){
+    opts=opts||{};
+    let pr=`<w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${bdr}`;
+    if(opts.shd)pr+=`<w:shd w:val="clear" w:fill="${opts.shd}"/>`;
+    pr+=`<w:vAlign w:val="center"/></w:tcPr>`;
+    let rpr="";
+    if(opts.b)rpr+="<w:b/>";
+    if(opts.sz)rpr+=`<w:sz w:val="${opts.sz}"/>`;
+    if(opts.clr)rpr+=`<w:color w:val="${opts.clr}"/>`;
+    rpr=rpr?`<w:rPr>${rpr}</w:rPr>`:"";
+    return`<w:tc>${pr}<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r>${rpr}<w:t xml:space="preserve">${x(txt||"")}</w:t></w:r></w:p></w:tc>`;
+  }
+  const cw=[418,2302,1465,1046,1360,732,837,1360,946];
+  const tw=10466;
+  const grid=cw.map(w=>`<w:gridCol w:w="${w}"/>`).join("");
+  const hd=["No.","Name","Signature Start","Phone","Position","BAC#","BAC Result","Signature Off","Time Sign Off"];
+
+  let body="";
+  days.forEach((day,di)=>{
+    if(di>0)body+=`<w:p><w:pPr><w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="567" w:right="720" w:bottom="567" w:left="720"/></w:sectPr></w:pPr></w:p>`;
+    // Title
+    body+=`<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="26"/></w:rPr><w:t>APC Daily Prestart / Notes</w:t></w:r></w:p>`;
+    // Header fields
+    const hlw=3200,hvw=tw-hlw;
+    const hf=[["Project",project],["Date",SO_dL(day.date)],["Project Manager / Supervisor",pm],["Safety Advisor (s)",safety],["No Of Staff",String(day.staff.length)]];
+    hf.forEach(([lb,vl])=>{
+      body+=`<w:tbl><w:tblPr><w:tblW w:w="${tw}" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="${hlw}"/><w:gridCol w:w="${hvw}"/></w:tblGrid>`;
+      body+=`<w:tr>${tc(lb,hlw,{b:true,sz:20})}${tc(vl,hvw,{b:true,sz:24})}</w:tr></w:tbl>`;
+    });
+    // Orange bars
+    body+=`<w:tbl><w:tblPr><w:tblW w:w="${tw}" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="${tw}"/></w:tblGrid>`;
+    body+=`<w:tr>${tc("PERSONS PRESENT - I acknowledge and understand any site specific hazards and control measures that may affect me",tw,{sz:14,shd:"E6B17D"})}</w:tr></w:tbl>`;
+    const lw=Math.floor(tw*.52),rw=tw-lw;
+    body+=`<w:tbl><w:tblPr><w:tblW w:w="${tw}" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="${lw}"/><w:gridCol w:w="${rw}"/></w:tblGrid>`;
+    body+=`<w:tr>${tc("*I declare that I am fit for work and free of injury or illness (Sign On)",lw,{sz:12,shd:"E6B17D"})}${tc("*I declare that I am free from injury or illness (Sign Off)",rw,{sz:12,shd:"E6B17D"})}</w:tr></w:tbl>`;
+    // Staff table
+    body+=`<w:tbl><w:tblPr><w:tblW w:w="${tw}" w:type="dxa"/></w:tblPr><w:tblGrid>${grid}</w:tblGrid>`;
+    body+=`<w:tr>${hd.map((h,i)=>tc(h,cw[i],{b:true,sz:16})).join("")}</w:tr>`;
+    const tot=day.staff.length+6;
+    for(let i=0;i<tot;i++){
+      const s=day.staff[i];
+      body+=`<w:tr><w:trPr><w:trHeight w:val="400"/></w:trPr>`;
+      body+=tc(i+1,cw[0],{b:true});
+      body+=tc(s?s.fn+" "+s.sn:"",cw[1],{sz:18});
+      body+=tc("",cw[2]);
+      body+=tc(s?s.ph:"",cw[3],{sz:16});
+      body+=tc(s?s.rl:"",cw[4],{sz:14});
+      for(let j=5;j<9;j++)body+=tc("",cw[j]);
+      body+="</w:tr>";
+    }
+    body+="</w:tbl>";
+    // Testing
+    body+=`<w:p><w:pPr><w:spacing w:before="100"/></w:pPr></w:p>`;
+    const tcw=[cw[0],cw[1],cw[2]+cw[3]+cw[4]+cw[5],cw[6],cw[7],cw[8]];
+    body+=`<w:tbl><w:tblPr><w:tblW w:w="${tw}" w:type="dxa"/></w:tblPr><w:tblGrid>${tcw.map(w=>`<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>`;
+    body+=`<w:tr>${tc("Ser",tcw[0],{b:true,sz:16,shd:"DDDDDD"})}${tc("Name",tcw[1],{b:true,sz:16,shd:"DDDDDD"})}${tc("Test Type - Hydro / AOD",tcw[2],{b:true,sz:16,shd:"DDDDDD"})}${tc("Test Result",tcw[3],{b:true,sz:16,shd:"DDDDDD"})}${tc("Retest",tcw[4],{b:true,sz:16,shd:"DDDDDD"})}${tc("Retest",tcw[5],{b:true,sz:16,shd:"DDDDDD"})}</w:tr>`;
+    for(let i=0;i<3;i++)body+=`<w:tr>${tc(i+1,tcw[0],{b:true})}${tc("",tcw[1])}${tc("",tcw[2])}${tc("",tcw[3])}${tc("",tcw[4])}${tc("",tcw[5])}</w:tr>`;
+    body+="</w:tbl>";
+    // Incident
+    body+=`<w:p><w:pPr><w:spacing w:before="100"/></w:pPr></w:p>`;
+    body+=`<w:tbl><w:tblPr><w:tblW w:w="${tw}" w:type="dxa"/></w:tblPr><w:tblGrid><w:gridCol w:w="${tw}"/></w:tblGrid>`;
+    body+=`<w:tr>${tc("APC Incident Notifications",tw,{b:true,sz:20,clr:"EE0000",shd:"FFE6E6"})}</w:tr></w:tbl>`;
+    const icw=[cw[0]+cw[1],cw[2]+cw[3]+cw[4]+cw[5]+cw[6],cw[7]+cw[8]];
+    body+=`<w:tbl><w:tblPr><w:tblW w:w="${tw}" w:type="dxa"/></w:tblPr><w:tblGrid>${icw.map(w=>`<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>`;
+    body+=`<w:tr>${tc("Project",icw[0],{b:true,sz:16,clr:"EE0000",shd:"FFE6E6"})}${tc("Title",icw[1],{b:true,sz:16,clr:"EE0000",shd:"FFE6E6"})}${tc("Reference Number",icw[2],{b:true,sz:16,clr:"EE0000",shd:"FFE6E6"})}</w:tr>`;
+    for(let i=0;i<5;i++)body+=`<w:tr>${tc(i+1,icw[0],{b:true,clr:"EE0000"})}${tc("",icw[1])}${tc("",icw[2])}</w:tr>`;
+    body+="</w:tbl>";
+  });
+
+  const docXml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<w:body>${body}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="567" w:right="720" w:bottom="567" w:left="720"/></w:sectPr></w:body></w:document>`;
+
+  const rels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`;
+
+  const wordRels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+</Relationships>`;
+
+  const ct=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`;
+
+  const zipFiles=[];
+  zipFiles.push({name:"[Content_Types].xml",data:ct});
+  zipFiles.push({name:"_rels/.rels",data:rels});
+  zipFiles.push({name:"word/_rels/document.xml.rels",data:wordRels});
+  zipFiles.push({name:"word/document.xml",data:docXml});
+  const zipBuf=SO_buildZip(zipFiles);
+  return zipBuf; // Uint8Array - caller converts to data URI for download
+}
+
+function SO_mkPrintHTML(project,days,pm,safety){
+  const OG='#e8b17d';
+  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let body='';
+  days.forEach((day,di)=>{
+    if(di>0)body+='<div style="page-break-before:always"></div>';
+    body+=`<div style="font-family:Arial,sans-serif;font-size:10pt;padding:8mm">`;
+    body+=`<h2 style="text-align:center;font-size:13pt;margin-bottom:6px">APC Daily Prestart / Notes</h2>`;
+    // Header fields
+    const hf=[['Project',project],['Date',SO_dL(day.date)],['Project Manager / Supervisor',day.pm],['Safety Advisor (s)',day.safety],['No Of Staff',String(day.staff.length)]];
+    body+=`<table style="width:100%;border-collapse:collapse;margin-bottom:4px">`;
+    hf.forEach(([lb,vl])=>{body+=`<tr><td style="border:1px solid #000;padding:3px 6px;font-weight:bold;width:45%;font-size:9pt">${esc(lb)}</td><td style="border:1px solid #000;padding:3px 6px;font-size:10pt">${esc(vl)}</td></tr>`;});
+    body+=`</table>`;
+    // Declaration bars
+    body+=`<div style="background:${OG};text-align:center;font-size:7pt;padding:4px;border:1px solid #000;margin-bottom:0">PERSONS PRESENT - I acknowledge and understand any site specific hazards and control measures that may affect me</div>`;
+    body+=`<table style="width:100%;border-collapse:collapse;margin-bottom:4px"><tr>`;
+    body+=`<td style="background:${OG};border:1px solid #000;padding:3px;font-size:7pt;text-align:center;width:52%">*I declare that I am fit for work and free of injury or illness (Sign On)</td>`;
+    body+=`<td style="background:${OG};border:1px solid #000;padding:3px;font-size:7pt;text-align:center">*I declare that I am free from injury or illness (Sign Off)</td></tr></table>`;
+    // Staff table
+    const cols=['No.','Name','Signature\nStart','Phone','Position','BAC#','BAC\nResult','Signature\nOff','Time\nSign Off'];
+    const ws=['4%','21%','13%','10%','13%','6%','8%','14%','11%'];
+    body+=`<table style="width:100%;border-collapse:collapse;margin-bottom:6px">`;
+    body+=`<thead><tr>${cols.map((c,i)=>`<th style="border:1px solid #000;padding:3px;font-size:7pt;text-align:center;width:${ws[i]};background:#f0f0f0">${esc(c).replace('\n','<br>')}</th>`).join('')}</tr></thead><tbody>`;
+    const minRows=Math.max(day.staff.length+4,10);
+    for(let i=0;i<minRows;i++){
+      const s=day.staff[i];
+      body+=`<tr style="height:18px">`;
+      body+=`<td style="border:1px solid #000;text-align:center;font-size:8pt;font-weight:bold">${i+1}</td>`;
+      body+=`<td style="border:1px solid #000;padding:2px 4px;font-size:8pt">${s?esc(s.fn+' '+s.sn):''}</td>`;
+      body+=`<td style="border:1px solid #000"></td>`;
+      body+=`<td style="border:1px solid #000;text-align:center;font-size:7pt">${s?esc(s.ph):''}</td>`;
+      body+=`<td style="border:1px solid #000;text-align:center;font-size:7pt">${s?esc(s.rl):''}</td>`;
+      body+=`<td style="border:1px solid #000"></td>`;
+      body+=`<td style="border:1px solid #000"></td>`;
+      body+=`<td style="border:1px solid #000"></td>`;
+      body+=`<td style="border:1px solid #000"></td>`;
+      body+=`</tr>`;
+    }
+    body+=`</tbody></table>`;
+    // BAC Testing
+    body+=`<table style="width:100%;border-collapse:collapse;margin-bottom:4px">`;
+    body+=`<thead><tr><th style="border:1px solid #000;background:#ddd;font-size:7pt;width:4%">Ser</th><th style="border:1px solid #000;background:#ddd;font-size:7pt;width:20%">Name</th><th style="border:1px solid #000;background:#ddd;font-size:7pt;width:46%">Test Type - Hydro / AOD</th><th style="border:1px solid #000;background:#ddd;font-size:7pt">Test Result</th><th style="border:1px solid #000;background:#ddd;font-size:7pt">Retest</th><th style="border:1px solid #000;background:#ddd;font-size:7pt">Retest</th></tr></thead><tbody>`;
+    for(let i=0;i<3;i++)body+=`<tr style="height:18px"><td style="border:1px solid #000;text-align:center;font-size:8pt;font-weight:bold">${i+1}</td><td style="border:1px solid #000"></td><td style="border:1px solid #000"></td><td style="border:1px solid #000"></td><td style="border:1px solid #000"></td><td style="border:1px solid #000"></td></tr>`;
+    body+=`</tbody></table>`;
+    // Incident notifications
+    body+=`<div style="background:#ffe6e6;border:1px solid #000;text-align:center;font-size:9pt;font-weight:bold;color:#cc0000;padding:4px">APC Incident Notifications</div>`;
+    body+=`<table style="width:100%;border-collapse:collapse"><thead><tr>`;
+    body+=`<th style="border:1px solid #000;background:#ffe6e6;font-size:7pt;color:#cc0000;width:25%">Project</th>`;
+    body+=`<th style="border:1px solid #000;background:#ffe6e6;font-size:7pt;color:#cc0000;width:55%">Title</th>`;
+    body+=`<th style="border:1px solid #000;background:#ffe6e6;font-size:7pt;color:#cc0000">Reference Number</th></tr></thead><tbody>`;
+    for(let i=0;i<5;i++)body+=`<tr style="height:16px"><td style="border:1px solid #000;text-align:center;font-size:8pt;font-weight:bold;color:#cc0000">${i+1}</td><td style="border:1px solid #000"></td><td style="border:1px solid #000"></td></tr>`;
+    body+=`</tbody></table></div>`;
+  });
+  return`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>APC Sign-On Sheets</title>
+<style>body{margin:0}@media print{.no-print{display:none}@page{margin:8mm;size:A4 portrait}}</style></head>
+<body>
+<div class="no-print" style="background:#1e3a5f;color:#93c5fd;padding:12px 20px;font-family:Arial;font-size:13px;display:flex;align-items:center;gap:16px">
+  <span>✓ Sign-On Sheet ready — use <strong>Ctrl+P</strong> (or ⌘+P on Mac) to print or save as PDF</span>
+  <button onclick="window.print()" style="background:#3b82f6;color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">🖨 Print / Save as PDF</button>
+</div>
+${body}</body></html>`;
+}
+
+function SO_togProj(code){
+  const i=SO_S.proj.indexOf(code);
+  if(i>=0)SO_S.proj.splice(i,1);else SO_S.proj.push(code);
+  SO_render();
+}
+
+async function SO_doGen(){
+  SO_S.pmO=document.getElementById("so_pmI")?.value||"";SO_S.saO=document.getElementById("so_saI")?.value||"";
+  if(!SO_S.pmO.trim()||!SO_S.saO.trim()){SO_sErr("Please enter the Project Manager / Supervisor and Safety Advisor names.");return;}
+  const btn=document.getElementById("so_gB");if(btn){btn.disabled=true;btn.textContent="Generating...";}
+  try{
+    const pm=SO_S.pmO.trim(),sa=SO_S.saO.trim();
+    const daily=SO_S.pv.map(day=>({date:day.date,label:day.label,staff:day.staff,pm,safety:sa}));
+    const projLabel=SO_S.proj.join(", ");
+    const ss=SO_fD(SO_S.pv[0].date).replace(/\//g,""),se=SO_fD(SO_S.pv[SO_S.pv.length-1].date).replace(/\//g,"");
+    const multi=SO_S.pv.length>1;
+    let fn,mime,bytes;
+
+    if(SO_S.fmt==="pdf"){
+      let doc=null;
+      for(const day of daily)doc=SO_mkPDF(projLabel,day.date,pm,sa,day.staff,doc);
+      fn=(multi?`APC_Sign_On_Sheets_${ss}-${se}`:`APC_Sign_On_Sheet_${ss}`)+".pdf";
+      doc.save(fn); // jsPDF native save - works everywhere
+      SO_S.res={files:[{fn,mode:"pdf"}],daily};
+    }else if(SO_S.fmt==="xlsx"){
+      bytes=SO_mkXLSX(projLabel,daily,pm,sa);
+      fn=(multi?`APC_Sign_On_Sheets_${ss}-${se}`:`APC_Sign_On_Sheet_${ss}`)+".xlsx";
+      mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      const xlsxURI=SO_bytesToDataURI(bytes,mime);
+      SO_S.res={files:[{fn,mode:"xlsx",uri:xlsxURI}],daily};
+    }else if(SO_S.fmt==="docx"){
+      bytes=SO_mkDOCX(projLabel,daily,pm,sa);
+      fn=(multi?`APC_Sign_On_Sheets_${ss}-${se}`:`APC_Sign_On_Sheet_${ss}`)+".docx";
+      mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      const docxURI=SO_bytesToDataURI(bytes,mime);
+      SO_S.res={files:[{fn,mode:"docx",uri:docxURI}],daily};
+    }else{
+      // HTML — open print-ready page in new tab
+      const html=SO_mkPrintHTML(projLabel,daily,pm,sa);
+      fn=(multi?`APC_Sign_On_Sheets_${ss}-${se}`:`APC_Sign_On_Sheet_${ss}`)+".html";
+      const w=window.open("","_blank");
+      if(w){w.document.write(html);w.document.close();}
+      else{SO_sErr("Pop-up blocked — allow pop-ups and try again.");if(btn){btn.disabled=false;btn.textContent="Generate Sign-On Sheet";}return;}
+      SO_S.res={files:[{fn,mode:"html"}],daily};
+    }
+
+    SO_S.step=5;SO_render();
+  }catch(x){SO_sErr("Failed: "+x.message);}
+  if(btn){btn.disabled=false;btn.textContent="Generate Sign-On Sheet";}
+}
+function SO_rKeep(){SO_S.step=1;SO_S.proj=[];SO_S.rt="both";SO_S.sm="include";SO_S.fmt="pdf";SO_S.single=true;SO_S.pmO="";SO_S.saO="";SO_S.pv=null;SO_S.res=null;SO_render();}
+function SO_resetAll(){
+  SO_S={step:0,sheets:null,fn:"",pL:[],proj:[],rt:"both",sm:"include",fmt:"pdf",sd:SO_fD(new Date()),ed:SO_fD(new Date()),single:true,pmO:"",saO:"",pv:null,res:null};
+  // If roster already loaded, skip upload screen
+  if (loadedWorkbook) {
+    try {
+      var parsed = SO_parseR(loadedWorkbook);
+      if (parsed.pL.length) {
+        SO_S.sheets = parsed.sheets;
+        SO_S.fn = 'loaded roster';
+        SO_S.pL = parsed.pL;
+        SO_S.step = 1;
+      }
+    } catch(e) {}
+  }
+  SO_render();
+}
+// Sign-on init handled by launchSignOn()
+
+</script>
+</body>
+</html>
