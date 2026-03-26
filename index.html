@@ -553,7 +553,7 @@ var loadedWorkbook = null; // raw SheetJS workbook, shared with sign-on generato
 
 // ── JSONBin configuration ──────────────────────────────────────────
 // Set these after creating your JSONBin account (see setup instructions)
-var JSONBIN_BIN_ID  = '69c4d091b7ec241ddca49d4a';
+var JSONBIN_BIN_ID  = '69c4e105b7ec241ddca4e1c0';
 var JSONBIN_API_KEY = '$2a$10$4OghUJgyTGYGF4Sf1SnM7OX//VkDV5G4tradbI/OQQ.eyjdlorCQy';
 var ADMIN_PIN       = '4158';
 
@@ -562,29 +562,32 @@ function autoLoadRoster() {
   if (!JSONBIN_BIN_ID || !JSONBIN_API_KEY) return;
   var banner = document.getElementById('autoload-banner');
   if (banner) banner.style.display = 'block';
+  setAutoloadStatus('⏳', 'Connecting to shared roster store…', false);
 
+  // Use X-Access-Key instead of X-Master-Key for reads - required for CORS on free tier
+  // Bin must be set to PUBLIC in JSONBin for cross-origin reads to work
   fetch('https://api.jsonbin.io/v3/b/' + JSONBIN_BIN_ID + '/latest', {
-    headers: { 'X-Master-Key': JSONBIN_API_KEY, 'X-Bin-Meta': 'false' }
+    method: 'GET',
+    headers: {
+      'X-Access-Key': JSONBIN_API_KEY,
+      'X-Bin-Meta': 'false'
+    }
   })
   .then(function(r) {
+    setAutoloadStatus('⏳', 'Fetch response: HTTP ' + r.status, false);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return r.json();
   })
   .then(function(resp) {
-    // JSONBin v3 returns record directly when X-Bin-Meta:false
-    // but sometimes wraps as {record:{...}} — handle both
     var data = (resp && resp.record) ? resp.record : resp;
-    if (!data || !data.pp || !data.pp.length) throw new Error('Bin is empty — admin needs to upload roster');
+    setAutoloadStatus('⏳', 'Got data — people: ' + (data.pp ? data.pp.length : 'none'), false);
+    if (!data || !data.pp || !data.pp.length) throw new Error('Bin is empty — admin needs to upload roster first');
     loadFromParsedData(data);
     setAutoloadStatus('✓', 'Shared roster loaded — updated ' + formatUploadDate(data.t), true);
   })
   .catch(function(e) {
-    console.warn('AutoLoad failed:', e.message);
-    setAutoloadStatus('⚠', 'No shared roster found — upload your own file below', false);
-    setTimeout(function() {
-      var b = document.getElementById('autoload-banner');
-      if (b) b.style.display = 'none';
-    }, 4000);
+    setAutoloadStatus('⚠', 'Auto-load failed: ' + e.message, false);
+    // Keep banner visible so user can read the error
   });
 }
 
@@ -643,6 +646,13 @@ function hideAdminUpload() {
   document.getElementById('adminPin').value = '';
   document.getElementById('pinErr').style.display = 'none';
   document.getElementById('adminUploadArea').style.display = 'none';
+}
+
+function adminContinue() {
+  document.getElementById('upload-card').style.display = 'none';
+  document.getElementById('wizard').style.display = 'block';
+  document.getElementById('reloadBtn').style.display = 'inline';
+  goStep(1);
 }
 
 function verifyAdminPin() {
@@ -733,33 +743,27 @@ function handleAdminUpload(file) {
       })
       .then(function(r) { return r.json(); })
       .then(function(resp) {
-        if (resp.record) {
-          document.getElementById('adminUploadStatus').textContent =
-            '✓ Shared roster updated — ' + people.length + ' people, ' + Object.keys(pnames).length + ' projects. All users will see this roster next time they load the app.';
-          document.getElementById('adminUploadStatus').style.color = '#10b981';
-          // Also load locally
+        if (resp.record || resp.pp) {
+          document.getElementById('adminUploadStatus').innerHTML =
+            '<div style="color:#10b981;font-weight:600;margin-bottom:8px">✓ Shared roster saved to JSONBin — ' + people.length + ' people, ' + Object.keys(pnames).length + ' projects</div>' +
+            '<div style="color:#64748b;font-size:11px;margin-bottom:12px">All users will see this roster next time they open the app.</div>' +
+            '<button class="btn-primary" onclick="adminContinue()" style="font-size:13px">Continue to reports →</button>';
+          // Store data ready for when user clicks Continue
           allPeople = people;
           projectNames = pnames;
-          document.getElementById('upload-card').style.display = 'none';
-          document.getElementById('wizard').style.display = 'block';
-          document.getElementById('reloadBtn').style.display = 'inline';
           populateProjects();
-          goStep(1);
         } else {
-          throw new Error(JSON.stringify(resp));
+          throw new Error('Unexpected response: ' + JSON.stringify(resp).slice(0, 100));
         }
       })
       .catch(function(e) {
-        document.getElementById('adminUploadStatus').textContent = '⚠ Upload failed: ' + e.message + '. Roster loaded locally only.';
-        document.getElementById('adminUploadStatus').style.color = '#f87171';
-        // Still load locally
+        document.getElementById('adminUploadStatus').innerHTML =
+          '<div style="color:#f87171;margin-bottom:8px">⚠ Could not save to JSONBin: ' + e.message + '</div>' +
+          '<div style="color:#64748b;font-size:11px;margin-bottom:12px">Roster loaded for this session only — other users will not see it automatically.</div>' +
+          '<button class="btn-primary" onclick="adminContinue()" style="font-size:13px">Continue anyway →</button>';
         allPeople = people;
         projectNames = pnames;
-        document.getElementById('upload-card').style.display = 'none';
-        document.getElementById('wizard').style.display = 'block';
-        document.getElementById('reloadBtn').style.display = 'inline';
         populateProjects();
-        goStep(1);
       });
 
     } catch(er) {
