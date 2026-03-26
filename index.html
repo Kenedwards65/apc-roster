@@ -194,42 +194,61 @@ tr:hover td{background:#0f172a}
       </div>
     </div>
 
-    <p>Upload your APC Roster Master file to begin. If an admin has loaded a shared roster it will load automatically.</p>
+    <!-- Three-button roster source selection -->
+    <div class="card" style="max-width:600px">
+      <div class="card-title">Select roster source</div>
+      <div class="card-subtitle">Choose how to load the APC Roster Master</div>
 
-    <!-- User upload -->
-    <label class="file-label">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      Upload my own roster file
-      <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
-    </label>
-
-    <!-- Admin upload -->
-    <div style="margin-top:12px">
-      <button class="file-label" id="adminBtn" onclick="showAdminUpload()" style="border-color:#475569;color:#64748b;font-size:12px;cursor:pointer;background:transparent;border:1px solid #334155">
-        🔒 Admin — upload shared roster
-      </button>
-    </div>
-
-    <!-- Admin PIN panel (hidden by default) -->
-    <div id="adminPanel" style="display:none;margin-top:14px;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px">
-      <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:10px">Enter admin PIN</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="password" id="adminPin" maxlength="4" placeholder="••••"
-          style="width:80px;padding:8px 12px;border-radius:8px;border:1px solid #334155;background:#0a0f1a;color:#f1f5f9;font-size:18px;text-align:center;letter-spacing:6px;font-family:inherit"
-          onkeydown="if(event.key==='Enter')verifyAdminPin()">
-        <button class="btn-primary" onclick="verifyAdminPin()" style="padding:8px 16px;font-size:12px">Unlock</button>
-        <button class="back-btn" onclick="hideAdminUpload()" style="font-size:12px">Cancel</button>
+      <!-- Button 1: Shared roster -->
+      <div id="sharedRosterBtn" style="margin-bottom:10px">
+        <button onclick="loadSharedRoster()" id="sharedRosterBtnEl"
+          style="width:100%;padding:16px;border-radius:10px;border:1.5px solid #1e3a5f;background:#0f2040;cursor:pointer;text-align:left;font-family:inherit;transition:all .15s"
+          onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='#1e3a5f'">
+          <div style="font-size:13px;font-weight:700;color:#10b981;margin-bottom:4px" id="sharedBtnTitle">⏳ Checking for shared roster…</div>
+          <div style="font-size:11px;color:#475569" id="sharedBtnSub">Loading from JSONBin…</div>
+        </button>
       </div>
-      <div id="pinErr" style="font-size:11px;color:#f87171;margin-top:6px;display:none">Incorrect PIN</div>
-      <!-- Admin file upload (shown after PIN verified) -->
-      <div id="adminUploadArea" style="display:none;margin-top:14px">
-        <div style="font-size:12px;color:#10b981;margin-bottom:10px">✓ Admin access granted</div>
-        <label class="file-label" style="border-color:#10b981;color:#10b981">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          Upload shared roster (all users)
-          <input type="file" id="adminFileInput" accept=".xlsx,.xls" style="display:none">
+
+      <!-- Button 2: Upload own file -->
+      <div style="margin-bottom:10px">
+        <label style="width:100%;padding:16px;border-radius:10px;border:1.5px solid #1e293b;background:#0f172a;cursor:pointer;text-align:left;font-family:inherit;display:block;transition:all .15s"
+          onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='#1e293b'">
+          <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:4px">📂 Upload my own roster file</div>
+          <div style="font-size:11px;color:#475569">Upload a local .xlsx file for this session only</div>
+          <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
         </label>
-        <div id="adminUploadStatus" style="font-size:12px;color:#475569;margin-top:8px"></div>
+      </div>
+
+      <!-- Button 3: Admin upload -->
+      <div>
+        <button onclick="showAdminUpload()" id="adminBtn"
+          style="width:100%;padding:16px;border-radius:10px;border:1.5px solid #1e293b;background:#0f172a;cursor:pointer;text-align:left;font-family:inherit;transition:all .15s"
+          onmouseover="this.style.borderColor='#475569'" onmouseout="this.style.borderColor='#1e293b'">
+          <div style="font-size:13px;font-weight:700;color:#64748b;margin-bottom:4px">🔒 Admin — upload shared roster</div>
+          <div style="font-size:11px;color:#475569">Upload a new roster to JSONBin for all users (PIN required)</div>
+        </button>
+      </div>
+
+      <!-- Admin PIN panel -->
+      <div id="adminPanel" style="display:none;margin-top:14px;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px">
+        <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:10px">Enter admin PIN</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="password" id="adminPin" maxlength="4" placeholder="••••"
+            style="width:80px;padding:8px 12px;border-radius:8px;border:1px solid #334155;background:#0a0f1a;color:#f1f5f9;font-size:18px;text-align:center;letter-spacing:6px;font-family:inherit"
+            onkeydown="if(event.key==='Enter')verifyAdminPin()">
+          <button class="btn-primary" onclick="verifyAdminPin()" style="padding:8px 16px;font-size:12px">Unlock</button>
+          <button class="back-btn" onclick="hideAdminUpload()" style="font-size:12px">Cancel</button>
+        </div>
+        <div id="pinErr" style="font-size:11px;color:#f87171;margin-top:6px;display:none">Incorrect PIN</div>
+        <div id="adminUploadArea" style="display:none;margin-top:14px">
+          <div style="font-size:12px;color:#10b981;margin-bottom:10px">✓ Admin access granted</div>
+          <label class="file-label" style="border-color:#10b981;color:#10b981">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Upload shared roster (all users)
+            <input type="file" id="adminFileInput" accept=".xlsx,.xls" style="display:none">
+          </label>
+          <div id="adminUploadStatus" style="font-size:12px;color:#475569;margin-top:8px"></div>
+        </div>
       </div>
     </div>
 
@@ -610,8 +629,7 @@ async function SO_decompressData(b64) {
 function autoLoadRoster() {
   if (!JSONBIN_BIN_ID || !JSONBIN_API_KEY) return;
   var banner = document.getElementById('autoload-banner');
-  if (banner) banner.style.display = 'block';
-  setAutoloadStatus('⏳', 'Connecting to shared roster store…', false);
+  if (banner) banner.style.display = 'none'; // use button UI instead
 
   // Use X-Access-Key instead of X-Master-Key for reads - required for CORS on free tier
   // Bin must be set to PUBLIC in JSONBin for cross-origin reads to work
@@ -652,15 +670,22 @@ function autoLoadRoster() {
 }
 
 function setAutoloadStatus(icon, msg, success) {
-  var el = document.getElementById('autoload-icon');
-  var tl = document.getElementById('autoload-title');
-  var sub = document.getElementById('autoload-sub');
+  // Update the shared roster button on the main screen
+  var title = document.getElementById('sharedBtnTitle');
+  var sub = document.getElementById('sharedBtnSub');
+  var btn = document.getElementById('sharedRosterBtnEl');
+  if (success) {
+    if (title) { title.textContent = '✓ Use shared roster'; title.style.color = '#10b981'; }
+    if (sub) sub.textContent = msg;
+    if (btn) { btn.style.borderColor = '#10b981'; btn.style.background = '#0a2010'; }
+  } else {
+    if (title) { title.textContent = icon + ' ' + (msg.includes('empty') ? 'No shared roster yet' : 'Shared roster unavailable'); title.style.color = '#f87171'; }
+    if (sub) sub.textContent = msg;
+    if (btn) { btn.style.borderColor = '#7f1d1d'; btn.style.background = '#0f172a'; btn.style.cursor = 'default'; btn.onclick = null; }
+  }
+  // Also update legacy banner if present
   var banner = document.getElementById('autoload-banner');
-  if (el) el.textContent = icon;
-  if (tl) { tl.textContent = success ? 'Shared roster ready' : 'Auto-load failed'; tl.style.color = success ? '#10b981' : '#f87171'; }
-  if (sub) sub.textContent = msg;
-  if (banner) banner.style.borderColor = success ? '#14532d' : '#7f1d1d';
-  if (success) setTimeout(function() { if (banner) banner.style.display = 'none'; }, 3000);
+  if (banner) banner.style.display = 'none';
 }
 
 function formatUploadDate(isoStr) {
@@ -708,6 +733,20 @@ function hideAdminUpload() {
   document.getElementById('adminPin').value = '';
   document.getElementById('pinErr').style.display = 'none';
   document.getElementById('adminUploadArea').style.display = 'none';
+}
+
+function loadSharedRoster() {
+  // Called when user clicks the shared roster button
+  if (!allPeople || !allPeople.length) {
+    // Try fetching again
+    autoLoadRoster();
+    return;
+  }
+  document.getElementById('upload-card').style.display = 'none';
+  document.getElementById('wizard').style.display = 'block';
+  document.getElementById('reloadBtn').style.display = 'inline';
+  populateProjects();
+  goStep(1);
 }
 
 function adminContinue() {
