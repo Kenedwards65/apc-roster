@@ -804,7 +804,6 @@ function handleAdminUpload(file) {
           body: JSON.stringify(envelope)
         });
       }).then(function(r) { return r.json(); })
-      .then(function(r) { return r.json(); })
       .then(function(resp) {
         if (resp.record || resp.z) {
           document.getElementById('adminUploadStatus').innerHTML =
