@@ -562,26 +562,29 @@ function autoLoadRoster() {
   if (!JSONBIN_BIN_ID || !JSONBIN_API_KEY) return;
   var banner = document.getElementById('autoload-banner');
   if (banner) banner.style.display = 'block';
-  setAutoloadStatus('⏳', 'Connecting to shared roster store…', false);
 
   fetch('https://api.jsonbin.io/v3/b/' + JSONBIN_BIN_ID + '/latest', {
     headers: { 'X-Master-Key': JSONBIN_API_KEY, 'X-Bin-Meta': 'false' }
   })
   .then(function(r) {
-    setAutoloadStatus('⏳', 'Fetch response: HTTP ' + r.status, false);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return r.json();
   })
   .then(function(resp) {
+    // JSONBin v3 returns record directly when X-Bin-Meta:false
+    // but sometimes wraps as {record:{...}} — handle both
     var data = (resp && resp.record) ? resp.record : resp;
-    setAutoloadStatus('⏳', 'Got data — people: ' + (data.pp ? data.pp.length : 'none'), false);
-    if (!data || !data.pp || !data.pp.length) throw new Error('Bin is empty — admin needs to upload roster first');
+    if (!data || !data.pp || !data.pp.length) throw new Error('Bin is empty — admin needs to upload roster');
     loadFromParsedData(data);
     setAutoloadStatus('✓', 'Shared roster loaded — updated ' + formatUploadDate(data.t), true);
   })
   .catch(function(e) {
-    setAutoloadStatus('⚠', 'Auto-load failed: ' + e.message, false);
-    // Keep banner visible so user can read the error
+    console.warn('AutoLoad failed:', e.message);
+    setAutoloadStatus('⚠', 'No shared roster found — upload your own file below', false);
+    setTimeout(function() {
+      var b = document.getElementById('autoload-banner');
+      if (b) b.style.display = 'none';
+    }, 4000);
   });
 }
 
