@@ -183,12 +183,56 @@ tr:hover td{background:#0f172a}
 
   <!-- UPLOAD -->
   <div id="upload-card">
-    <p>Upload your APC Roster Master Excel file to begin. The analyser reads all Con Roster and Mnt Roster sheets automatically.</p>
+    <!-- Auto-load status banner -->
+    <div id="autoload-banner" style="display:none;background:#0f2040;border:1px solid #1e3a5f;border-radius:10px;padding:14px 18px;margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div id="autoload-icon" style="font-size:22px">⏳</div>
+        <div>
+          <div id="autoload-title" style="font-size:13px;font-weight:600;color:#f1f5f9">Loading shared roster…</div>
+          <div id="autoload-sub" style="font-size:11px;color:#475569;margin-top:2px"></div>
+        </div>
+      </div>
+    </div>
+
+    <p>Upload your APC Roster Master file to begin. If an admin has loaded a shared roster it will load automatically.</p>
+
+    <!-- User upload -->
     <label class="file-label">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      Select roster file (.xlsx)
+      Upload my own roster file
       <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
     </label>
+
+    <!-- Admin upload -->
+    <div style="margin-top:12px">
+      <button class="file-label" id="adminBtn" onclick="showAdminUpload()" style="border-color:#475569;color:#64748b;font-size:12px;cursor:pointer;background:transparent;border:1px solid #334155">
+        🔒 Admin — upload shared roster
+      </button>
+    </div>
+
+    <!-- Admin PIN panel (hidden by default) -->
+    <div id="adminPanel" style="display:none;margin-top:14px;background:#0f172a;border:1px solid #334155;border-radius:10px;padding:16px">
+      <div style="font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:10px">Enter admin PIN</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="password" id="adminPin" maxlength="4" placeholder="••••"
+          style="width:80px;padding:8px 12px;border-radius:8px;border:1px solid #334155;background:#0a0f1a;color:#f1f5f9;font-size:18px;text-align:center;letter-spacing:6px;font-family:inherit"
+          onkeydown="if(event.key==='Enter')verifyAdminPin()">
+        <button class="btn-primary" onclick="verifyAdminPin()" style="padding:8px 16px;font-size:12px">Unlock</button>
+        <button class="back-btn" onclick="hideAdminUpload()" style="font-size:12px">Cancel</button>
+      </div>
+      <div id="pinErr" style="font-size:11px;color:#f87171;margin-top:6px;display:none">Incorrect PIN</div>
+      <!-- Admin file upload (shown after PIN verified) -->
+      <div id="adminUploadArea" style="display:none;margin-top:14px">
+        <div style="font-size:12px;color:#10b981;margin-bottom:10px">✓ Admin access granted</div>
+        <label class="file-label" style="border-color:#10b981;color:#10b981">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Upload shared roster (all users)
+          <input type="file" id="adminFileInput" accept=".xlsx,.xls" style="display:none">
+        </label>
+        <div id="adminUploadStatus" style="font-size:12px;color:#475569;margin-top:8px"></div>
+      </div>
+    </div>
+
     <div id="load-status"></div>
     <div id="load-err"></div>
   </div>
@@ -506,6 +550,213 @@ var fatigueThreshold = 14;
 var currentStep = 1;
 var exportData = { headers: [], rows: [], title: '', meta: '' };
 var loadedWorkbook = null; // raw SheetJS workbook, shared with sign-on generator
+
+// ── JSONBin configuration ──────────────────────────────────────────
+// Set these after creating your JSONBin account (see setup instructions)
+var JSONBIN_BIN_ID  = '69c4d091b7ec241ddca49d4a';
+var JSONBIN_API_KEY = '$2a$10$4OghUJgyTGYGF4Sf1SnM7OX//VkDV5G4tradbI/OQQ.eyjdlorCQy';
+var ADMIN_PIN       = '4158';
+
+// ── Auto-load roster from JSONBin on startup ───────────────────────
+function autoLoadRoster() {
+  if (!JSONBIN_BIN_ID || !JSONBIN_API_KEY) return; // not configured yet
+  var banner = document.getElementById('autoload-banner');
+  if (banner) banner.style.display = 'block';
+
+  fetch('https://api.jsonbin.io/v3/b/' + JSONBIN_BIN_ID + '/latest', {
+    headers: { 'X-Master-Key': JSONBIN_API_KEY, 'X-Bin-Meta': 'false' }
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (!data || !data.pp || !data.pp.length) throw new Error('No roster data found');
+    loadFromParsedData(data);
+    setAutoloadStatus('✓', 'Shared roster loaded — updated ' + formatUploadDate(data.t), true);
+  })
+  .catch(function(e) {
+    setAutoloadStatus('⚠', 'Could not load shared roster — upload your own file below', false);
+    setTimeout(function() {
+      var b = document.getElementById('autoload-banner');
+      if (b) b.style.display = 'none';
+    }, 4000);
+  });
+}
+
+function setAutoloadStatus(icon, msg, success) {
+  var el = document.getElementById('autoload-icon');
+  var tl = document.getElementById('autoload-title');
+  var sub = document.getElementById('autoload-sub');
+  var banner = document.getElementById('autoload-banner');
+  if (el) el.textContent = icon;
+  if (tl) { tl.textContent = success ? 'Shared roster ready' : 'Auto-load failed'; tl.style.color = success ? '#10b981' : '#f87171'; }
+  if (sub) sub.textContent = msg;
+  if (banner) banner.style.borderColor = success ? '#14532d' : '#7f1d1d';
+  if (success) setTimeout(function() { if (banner) banner.style.display = 'none'; }, 3000);
+}
+
+function formatUploadDate(isoStr) {
+  if (!isoStr) return 'unknown date';
+  try {
+    var d = new Date(isoStr);
+    return d.toLocaleDateString('en-AU', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  } catch(e) { return isoStr; }
+}
+
+// ── Load from pre-parsed JSON data (compact keys) ─────────────────
+function loadFromParsedData(data) {
+  // Expand compact keys back to full format
+  allPeople = (data.pp || []).map(function(p) {
+    return {
+      project: p.p, name: p.n, role: normaliseRole(p.r),
+      area: p.a || '', sheetType: p.s || 'mnt', days: p.d || {}
+    };
+  });
+  projectNames = data.pn || {};
+  document.getElementById('upload-card').style.display = 'none';
+  document.getElementById('wizard').style.display = 'block';
+  document.getElementById('reloadBtn').style.display = 'inline';
+  populateProjects();
+  goStep(1);
+}
+
+// ── Admin PIN verification ─────────────────────────────────────────
+function showAdminUpload() {
+  document.getElementById('adminPanel').style.display = 'block';
+  document.getElementById('adminBtn').style.display = 'none';
+  setTimeout(function() { document.getElementById('adminPin').focus(); }, 100);
+}
+
+function hideAdminUpload() {
+  document.getElementById('adminPanel').style.display = 'none';
+  document.getElementById('adminBtn').style.display = 'inline-flex';
+  document.getElementById('adminPin').value = '';
+  document.getElementById('pinErr').style.display = 'none';
+  document.getElementById('adminUploadArea').style.display = 'none';
+}
+
+function verifyAdminPin() {
+  var pin = document.getElementById('adminPin').value.trim();
+  if (pin === ADMIN_PIN) {
+    document.getElementById('adminUploadArea').style.display = 'block';
+    document.getElementById('pinErr').style.display = 'none';
+    document.getElementById('adminPin').closest('div').style.display = 'none';
+    // Wire up admin file input
+    document.getElementById('adminFileInput').addEventListener('change', function(e) {
+      handleAdminUpload(e.target.files[0]);
+    });
+  } else {
+    document.getElementById('pinErr').style.display = 'block';
+    document.getElementById('adminPin').value = '';
+    document.getElementById('adminPin').focus();
+  }
+}
+
+// ── Admin roster upload → parse → compress → send to JSONBin ──────
+function handleAdminUpload(file) {
+  if (!file) return;
+  if (!JSONBIN_BIN_ID || !JSONBIN_API_KEY) {
+    document.getElementById('adminUploadStatus').textContent =
+      '⚠ JSONBin not configured — see setup instructions. File will load locally only.';
+    document.getElementById('adminUploadStatus').style.color = '#f59e0b';
+    // Still load locally
+    document.getElementById('fileInput').files = document.getElementById('adminFileInput').files;
+    document.getElementById('fileInput').dispatchEvent(new Event('change'));
+    return;
+  }
+
+  document.getElementById('adminUploadStatus').textContent = 'Parsing roster…';
+  document.getElementById('adminUploadStatus').style.color = '#475569';
+
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      var wb = XLSX.read(ev.target.result, { type: 'array' });
+      loadedWorkbook = wb;
+      var people = [];
+      var pnames = {};
+      var sheets = wb.SheetNames.filter(function(n) { return /roster/i.test(n) && !/sub|leave|cycle|template/i.test(n); });
+      sheets.forEach(function(n) {
+        var st = /^con\s+roster/i.test(n.trim()) ? 'con' : 'mnt';
+        var parsed = parseSheet(wb.Sheets[n], st);
+        people = people.concat(parsed);
+      });
+      // Extract project names
+      sheets.forEach(function(n) {
+        var raw = XLSX.utils.sheet_to_json(wb.Sheets[n], {header:1, defval:null, raw:true});
+        raw.forEach(function(row) {
+          if (!row || row.length < 9) return;
+          var col3 = String(row[3] || '').trim();
+          var col8 = String(row[8] || '').trim();
+          var isHdr = (col3 === 'Project' || /^P[\w\-]+$/.test(col3));
+          if (isHdr && /^P[\w\-]+\s+\S/.test(col8)) {
+            var m = col8.match(/^(P[\w\-]+)\s+(.*)/);
+            if (m) pnames[m[1].trim()] = m[2].trim();
+          }
+        });
+      });
+
+      if (!people.length) throw new Error('No person data found');
+
+      // Build compact payload
+      var payload = {
+        v: file.name.replace(/\.[^.]+$/, ''),
+        t: new Date().toISOString(),
+        pn: pnames,
+        pp: people.map(function(p) {
+          return { p: p.project, n: p.name, r: p.role, a: p.area || '', s: p.sheetType || 'mnt', d: p.days };
+        })
+      };
+
+      document.getElementById('adminUploadStatus').textContent = 'Uploading to shared store (' + people.length + ' people)…';
+
+      // Send to JSONBin
+      var method = 'PUT';
+      var url = 'https://api.jsonbin.io/v3/b/' + JSONBIN_BIN_ID;
+      fetch(url, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Master-Key': JSONBIN_API_KEY
+        },
+        body: JSON.stringify(payload)
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(resp) {
+        if (resp.record) {
+          document.getElementById('adminUploadStatus').textContent =
+            '✓ Shared roster updated — ' + people.length + ' people, ' + Object.keys(pnames).length + ' projects. All users will see this roster next time they load the app.';
+          document.getElementById('adminUploadStatus').style.color = '#10b981';
+          // Also load locally
+          allPeople = people;
+          projectNames = pnames;
+          document.getElementById('upload-card').style.display = 'none';
+          document.getElementById('wizard').style.display = 'block';
+          document.getElementById('reloadBtn').style.display = 'inline';
+          populateProjects();
+          goStep(1);
+        } else {
+          throw new Error(JSON.stringify(resp));
+        }
+      })
+      .catch(function(e) {
+        document.getElementById('adminUploadStatus').textContent = '⚠ Upload failed: ' + e.message + '. Roster loaded locally only.';
+        document.getElementById('adminUploadStatus').style.color = '#f87171';
+        // Still load locally
+        allPeople = people;
+        projectNames = pnames;
+        document.getElementById('upload-card').style.display = 'none';
+        document.getElementById('wizard').style.display = 'block';
+        document.getElementById('reloadBtn').style.display = 'inline';
+        populateProjects();
+        goStep(1);
+      });
+
+    } catch(er) {
+      document.getElementById('adminUploadStatus').textContent = 'Error: ' + er.message;
+      document.getElementById('adminUploadStatus').style.color = '#f87171';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
 var projectNames = {}; // map of project code -> full name e.g. { P1880: 'Brockman' }
 
 // ── File loading ───────────────────────────────────────────────────
@@ -614,6 +865,9 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
   };
   reader.readAsArrayBuffer(file);
 });
+
+// Auto-load shared roster when page opens
+window.addEventListener('load', function() { autoLoadRoster(); });
 
 function resetAll() {
   allPeople = []; reportType = ''; selectedProject = ''; selectedPeople = []; selectedTrades = '';
@@ -1313,68 +1567,90 @@ function buildFatigue() {
 
   var people = Object.values(merged);
 
-  // Get all dates across the entire roster span for this project (not just selected range)
-  // so we can detect runs that started before the from date
+  // All dates across the entire roster span for this project
   var allDates = [];
   var dateSet = new Set();
   people.forEach(function(p) { Object.keys(p.days).forEach(function(d) { if (!dateSet.has(d)) { dateSet.add(d); allDates.push(d); } }); });
   allDates.sort();
 
-  // Date range filter for reporting (only report breaches that fall within selected range)
+  // Date range filter for reporting
   var rFrom = document.getElementById('dateFrom').value;
-  var rTo = document.getElementById('dateTo').value;
+  var rTo   = document.getElementById('dateTo').value;
+
+  // Classify a day value for fatigue purposes
+  var FLY_OUT = /fly[\s\-]*(out)|dri[\s\-]*(out)|drive[\s\-]*(out)|dve[\s\-]*(out)/i;
+  var FLY_IN  = /fly[\s\-]*(in)|dri[\s\-]*(in)|drive[\s\-]*(in)|dve[\s\-]*(in)/i;
+
+  function fatigueClass(raw) {
+    if (!raw) return 'blank';
+    var s = String(raw).trim();
+    if (!s || s === '0' || s === '\xa0') return 'blank';
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return 'blank';
+    // Fly Out / Drive Out — exit day, ends the run but is NOT counted
+    if (FLY_OUT.test(s) && !FLY_IN.test(s)) return 'flyout';
+    // Fly In / Drive In — counts as day 1 of a new swing
+    if (FLY_IN.test(s)) return 'work';
+    // Work day numbers 1–50
+    if (/^\d+$/.test(s) && parseInt(s) >= 1 && parseInt(s) <= 50) return 'work';
+    // On-site location codes count as working
+    if (/^(bs1|bs2|wpv|wr|billabong|brockman|mesa|camp\s*\d|convo|singer|tarcutta|monarto|dinawan|kumarina|pyramid|argyle|winu|burnt.gully)$/i.test(s)) return 'work';
+    // Everything else (RnR, leave, sick, blank, RDO) is a break
+    return 'break';
+  }
 
   var breaches = [];
 
   people.forEach(function(p) {
-    // Skip TOTAL rows and section headers
     if (/^total/i.test(p.name)) return;
     if (/^P[\w\-]+\s+/i.test(p.name)) return;
 
     var consecutive = 0;
     var runStart = '';
-    var breachReported = false; // track if we already reported this specific run
+    var reported = false;
 
     allDates.forEach(function(d) {
       var raw = p.days[d] || '';
-      var cls = classifyDay(raw);
-      var isWorkOrTravel = cls.type === 'work' || cls.type === 'travel';
+      var fc = fatigueClass(raw);
 
-      if (isWorkOrTravel) {
+      if (fc === 'work') {
         consecutive++;
         if (consecutive === 1) runStart = d;
-        // Flag the exact day they cross the threshold
-        if (consecutive === fatigueThreshold + 1 && !breachReported) {
-          // Only include if this breach date falls within the selected range
+        // Flag the first day the threshold is exceeded
+        if (consecutive === fatigueThreshold + 1 && !reported) {
           if ((!rFrom || d >= rFrom) && (!rTo || d <= rTo)) {
             breaches.push({
-              name: p.name,
-              project: p.project,
-              role: p.role,
-              runStart: runStart,
-              exceededOn: d,
-              totalRun: consecutive  // will be updated as run continues
+              name: p.name, project: p.project, role: p.role,
+              runStart: runStart, exceededOn: d, totalRun: consecutive
             });
           }
-          breachReported = true;
+          reported = true;
         }
-        // Update the total run length on the last recorded breach for this run
-        if (breachReported && breaches.length > 0) {
+        // Keep updating total run on the active breach entry
+        if (reported && breaches.length) {
           var last = breaches[breaches.length - 1];
           if (last.name === p.name && last.project === p.project && last.runStart === runStart) {
             last.totalRun = consecutive;
           }
         }
-      } else {
-        // Break in consecutive days - reset
+
+      } else if (fc === 'flyout') {
+        // Fly Out ends the run — does NOT count as a working day
+        // If run already breached threshold, the breach stands (real fatigue risk)
+        // Reset counter so next swing starts fresh
         consecutive = 0;
         runStart = '';
-        breachReported = false;
+        reported = false;
+
+      } else {
+        // Break (RnR, leave, sick, blank) — resets everything
+        consecutive = 0;
+        runStart = '';
+        reported = false;
       }
     });
   });
 
-  // Sort: longest run first, then by person name
+  // Sort: longest run first
   breaches.sort(function(a, b) {
     if (b.totalRun !== a.totalRun) return b.totalRun - a.totalRun;
     return a.name.localeCompare(b.name);
@@ -1392,7 +1668,9 @@ function buildFatigue() {
   });
 
   var projLabel = proj === 'ALL' ? 'All projects' : proj;
-  setResultHeader('Fatigue Report — ' + projLabel, breaches.length + ' breach' + (breaches.length !== 1 ? 'es' : '') + ' · threshold: ' + fatigueThreshold + ' consecutive days · ' + rFrom + ' to ' + rTo);
+  setResultHeader('Fatigue Report — ' + projLabel,
+    breaches.length + ' breach' + (breaches.length !== 1 ? 'es' : '') +
+    ' · threshold: ' + fatigueThreshold + ' consecutive days · ' + rFrom + ' to ' + rTo);
 
   setMetrics([
     { label: 'Breaches flagged', val: fmt(breaches.length) },
@@ -1401,14 +1679,15 @@ function buildFatigue() {
     { label: 'Threshold', val: fatigueThreshold + ' days' }
   ]);
 
-  document.getElementById('legendBar').innerHTML = '';
+  document.getElementById('legendBar').innerHTML =
+    '<span style="font-size:11px;color:#475569">Note: Fly Out / Drive Out days are not counted toward the consecutive run. ' +
+    'Fly In / Drive In counts as day 1. A breach is flagged when ' + fatigueThreshold + ' consecutive work/travel days ' +
+    'are reached without a break, regardless of whether the swing ends with a Fly Out.</span>';
 
-  // Colour code by severity
   var tdCls = function(row, i) {
     if (i === 0) return 'bv';
     if (i === 1 || i === 2) return 'muted';
     if (i === 5) {
-      // total run - colour by severity
       var days = Number(row[5]);
       if (days >= 21) return 'num s-sick';
       if (days >= 18) return 'num tv';
@@ -1419,22 +1698,22 @@ function buildFatigue() {
     return '';
   };
 
-  buildTable(headers, rows,
-    ['', '', '', 'num', 'num', 'num', 'num'],
-    tdCls
-  );
+  buildTable(headers, rows, ['','','','num','num','num','num'], tdCls);
 
   if (!rows.length) {
-    document.getElementById('reportTable').innerHTML = '<tr><td colspan="7" class="empty-row" style="color:#2d7dd2;padding:32px 14px">No fatigue breaches detected for the selected project and date range ✓</td></tr>';
+    document.getElementById('reportTable').innerHTML =
+      '<tr><td colspan="7" class="empty-row" style="color:#3b82f6;padding:32px 14px">' +
+      'No fatigue breaches detected for the selected project and date range ✓</td></tr>';
   }
 
   exportData = {
-    headers: headers,
-    rows: rows,
+    headers: headers, rows: rows,
     title: 'Fatigue Report — ' + projLabel,
-    meta: breaches.length + ' breaches | threshold: ' + fatigueThreshold + ' consecutive days | ' + rFrom + ' to ' + rTo
+    meta: breaches.length + ' breaches | threshold: ' + fatigueThreshold + ' days | ' + rFrom + ' to ' + rTo +
+          ' | Fly Out days not counted | Fly In = day 1'
   };
 }
+
 
 // ── Table renderer ─────────────────────────────────────────────────
 function buildTable(headers, rows, thClasses, tdClassFn) {
