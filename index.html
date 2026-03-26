@@ -559,25 +559,29 @@ var ADMIN_PIN       = '4158';
 
 // ── Auto-load roster from JSONBin on startup ───────────────────────
 function autoLoadRoster() {
-  if (!JSONBIN_BIN_ID || !JSONBIN_API_KEY) return; // not configured yet
+  if (!JSONBIN_BIN_ID || !JSONBIN_API_KEY) return;
   var banner = document.getElementById('autoload-banner');
   if (banner) banner.style.display = 'block';
+  setAutoloadStatus('⏳', 'Connecting to shared roster store…', false);
 
   fetch('https://api.jsonbin.io/v3/b/' + JSONBIN_BIN_ID + '/latest', {
     headers: { 'X-Master-Key': JSONBIN_API_KEY, 'X-Bin-Meta': 'false' }
   })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    if (!data || !data.pp || !data.pp.length) throw new Error('No roster data found');
+  .then(function(r) {
+    setAutoloadStatus('⏳', 'Fetch response: HTTP ' + r.status, false);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  })
+  .then(function(resp) {
+    var data = (resp && resp.record) ? resp.record : resp;
+    setAutoloadStatus('⏳', 'Got data — people: ' + (data.pp ? data.pp.length : 'none'), false);
+    if (!data || !data.pp || !data.pp.length) throw new Error('Bin is empty — admin needs to upload roster first');
     loadFromParsedData(data);
     setAutoloadStatus('✓', 'Shared roster loaded — updated ' + formatUploadDate(data.t), true);
   })
   .catch(function(e) {
-    setAutoloadStatus('⚠', 'Could not load shared roster — upload your own file below', false);
-    setTimeout(function() {
-      var b = document.getElementById('autoload-banner');
-      if (b) b.style.display = 'none';
-    }, 4000);
+    setAutoloadStatus('⚠', 'Auto-load failed: ' + e.message, false);
+    // Keep banner visible so user can read the error
   });
 }
 
@@ -604,16 +608,21 @@ function formatUploadDate(isoStr) {
 // ── Load from pre-parsed JSON data (compact keys) ─────────────────
 function loadFromParsedData(data) {
   // Expand compact keys back to full format
-  allPeople = (data.pp || []).map(function(p) {
+  var pp = data.pp || [];
+  console.log('loadFromParsedData: ' + pp.length + ' people, ' + Object.keys(data.pn || {}).length + ' projects');
+  allPeople = pp.map(function(p) {
     return {
       project: p.p, name: p.n, role: normaliseRole(p.r),
       area: p.a || '', sheetType: p.s || 'mnt', days: p.d || {}
     };
   });
   projectNames = data.pn || {};
+  // Store workbook as null since we loaded from JSON (sign-on will need file upload)
+  loadedWorkbook = null;
   document.getElementById('upload-card').style.display = 'none';
   document.getElementById('wizard').style.display = 'block';
   document.getElementById('reloadBtn').style.display = 'inline';
+  document.getElementById('load-status').textContent = '';
   populateProjects();
   goStep(1);
 }
@@ -867,7 +876,10 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
 });
 
 // Auto-load shared roster when page opens
-window.addEventListener('load', function() { autoLoadRoster(); });
+window.addEventListener('load', function() {
+  // Small delay to ensure XLSX and jsPDF libraries are ready
+  setTimeout(function() { autoLoadRoster(); }, 500);
+});
 
 function resetAll() {
   allPeople = []; reportType = ''; selectedProject = ''; selectedPeople = []; selectedTrades = '';
