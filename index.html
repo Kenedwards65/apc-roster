@@ -677,11 +677,24 @@ function setAutoloadStatus(icon, msg, success) {
   if (success) {
     if (title) { title.textContent = '✓ Use shared roster'; title.style.color = '#10b981'; }
     if (sub) sub.textContent = msg;
-    if (btn) { btn.style.borderColor = '#10b981'; btn.style.background = '#0a2010'; }
+    if (btn) {
+      btn.style.borderColor = '#10b981';
+      btn.style.background = '#0a2010';
+      btn.style.cursor = 'pointer';
+      btn.onclick = loadSharedRoster; // ensure clickable
+    }
   } else {
-    if (title) { title.textContent = icon + ' ' + (msg.includes('empty') ? 'No shared roster yet' : 'Shared roster unavailable'); title.style.color = '#f87171'; }
+    if (title) {
+      title.textContent = icon + ' ' + (msg.includes('empty') ? 'No shared roster yet — admin needs to upload' : 'Shared roster unavailable');
+      title.style.color = '#64748b';
+    }
     if (sub) sub.textContent = msg;
-    if (btn) { btn.style.borderColor = '#7f1d1d'; btn.style.background = '#0f172a'; btn.style.cursor = 'default'; btn.onclick = null; }
+    if (btn) {
+      btn.style.borderColor = '#334155';
+      btn.style.background = '#0f172a';
+      btn.style.cursor = 'default';
+      btn.onclick = null;
+    }
   }
   // Also update legacy banner if present
   var banner = document.getElementById('autoload-banner');
@@ -698,10 +711,9 @@ function formatUploadDate(isoStr) {
 
 // ── Load from pre-parsed JSON data (compact keys) ─────────────────
 function loadFromParsedData(data) {
-  // Expand compact keys back to full format
+  // Load data into memory only — do NOT navigate to wizard
+  // User clicks the shared roster button themselves
   var pp = data.pp || [];
-  console.log('loadFromParsedData: ' + pp.length + ' people, ' + Object.keys(data.pn || {}).length + ' projects');
-  // Store upload date for sign-on screen
   window._soSharedRosterDate = formatUploadDate(data.t);
   allPeople = pp.map(function(p) {
     return {
@@ -710,14 +722,10 @@ function loadFromParsedData(data) {
     };
   });
   projectNames = data.pn || {};
-  // Store workbook as null since we loaded from JSON (sign-on will need file upload)
   loadedWorkbook = null;
-  document.getElementById('upload-card').style.display = 'none';
-  document.getElementById('wizard').style.display = 'block';
-  document.getElementById('reloadBtn').style.display = 'inline';
-  document.getElementById('load-status').textContent = '';
   populateProjects();
-  goStep(1);
+  // Just update the button — don't navigate
+  // setAutoloadStatus will handle button UI update
 }
 
 // ── Admin PIN verification ─────────────────────────────────────────
