@@ -558,6 +558,55 @@ var JSONBIN_API_KEY = '$2a$10$4OghUJgyTGYGF4Sf1SnM7OX//VkDV5G4tradbI/OQQ.eyjdlor
 var ADMIN_PIN       = '4158';
 
 // ── Auto-load roster from JSONBin on startup ───────────────────────
+// ── Compress/decompress for JSONBin (gzip + base64) ──────────────
+async function SO_compressData(obj) {
+  var json = JSON.stringify(obj);
+  var bytes = new TextEncoder().encode(json);
+  var stream = new CompressionStream('gzip');
+  var writer = stream.writable.getWriter();
+  writer.write(bytes);
+  writer.close();
+  var chunks = [];
+  var reader = stream.readable.getReader();
+  while (true) {
+    var result = await reader.read();
+    if (result.done) break;
+    chunks.push(result.value);
+  }
+  var total = chunks.reduce(function(a,c){return a+c.length;}, 0);
+  var merged = new Uint8Array(total);
+  var offset = 0;
+  chunks.forEach(function(c){ merged.set(c, offset); offset += c.length; });
+  // Convert to base64
+  var binary = '';
+  for (var i = 0; i < merged.length; i += 8192) {
+    binary += String.fromCharCode.apply(null, merged.subarray(i, i+8192));
+  }
+  return btoa(binary);
+}
+
+async function SO_decompressData(b64) {
+  var binary = atob(b64);
+  var bytes = new Uint8Array(binary.length);
+  for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  var stream = new DecompressionStream('gzip');
+  var writer = stream.writable.getWriter();
+  writer.write(bytes);
+  writer.close();
+  var chunks = [];
+  var reader = stream.readable.getReader();
+  while (true) {
+    var result = await reader.read();
+    if (result.done) break;
+    chunks.push(result.value);
+  }
+  var total = chunks.reduce(function(a,c){return a+c.length;}, 0);
+  var merged = new Uint8Array(total);
+  var offset = 0;
+  chunks.forEach(function(c){ merged.set(c, offset); offset += c.length; });
+  return JSON.parse(new TextDecoder().decode(merged));
+}
+
 function autoLoadRoster() {
   if (!JSONBIN_BIN_ID || !JSONBIN_API_KEY) return;
   var banner = document.getElementById('autoload-banner');
@@ -580,10 +629,21 @@ function autoLoadRoster() {
   })
   .then(function(resp) {
     var data = (resp && resp.record) ? resp.record : resp;
-    setAutoloadStatus('⏳', 'Got data — people: ' + (data.pp ? data.pp.length : 'none'), false);
-    if (!data || !data.pp || !data.pp.length) throw new Error('Bin is empty — admin needs to upload roster first');
-    loadFromParsedData(data);
-    setAutoloadStatus('✓', 'Shared roster loaded — updated ' + formatUploadDate(data.t), true);
+    setAutoloadStatus('⏳', 'Got data — checking format…', false);
+    if (!data) throw new Error('Empty response from JSONBin');
+    // Handle compressed format {z: base64_gzip} or legacy uncompressed
+    if (data.z) {
+      SO_decompressData(data.z).then(function(decompressed) {
+        if (!decompressed || !decompressed.pp || !decompressed.pp.length) throw new Error('Bin is empty — admin needs to upload roster first');
+        loadFromParsedData(decompressed);
+        setAutoloadStatus('✓', 'Shared roster loaded — updated ' + formatUploadDate(decompressed.t), true);
+      }).catch(function(e) { throw new Error('Decompress failed: ' + e.message); });
+    } else if (data.pp && data.pp.length) {
+      loadFromParsedData(data);
+      setAutoloadStatus('✓', 'Shared roster loaded — updated ' + formatUploadDate(data.t), true);
+    } else {
+      throw new Error('Bin is empty — admin needs to upload roster first');
+    }
   })
   .catch(function(e) {
     setAutoloadStatus('⚠', 'Auto-load failed: ' + e.message, false);
@@ -730,20 +790,23 @@ function handleAdminUpload(file) {
 
       document.getElementById('adminUploadStatus').textContent = 'Uploading to shared store (' + people.length + ' people)…';
 
-      // Send to JSONBin
-      var method = 'PUT';
-      var url = 'https://api.jsonbin.io/v3/b/' + JSONBIN_BIN_ID;
-      fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Master-Key': JSONBIN_API_KEY
-        },
-        body: JSON.stringify(payload)
-      })
+      // Compress then send to JSONBin
+      document.getElementById('adminUploadStatus').textContent = 'Compressing data…';
+      SO_compressData(payload).then(function(compressed) {
+        var envelope = { z: compressed };
+        document.getElementById('adminUploadStatus').textContent = 'Saving to JSONBin (' + Math.round(JSON.stringify(envelope).length/1024) + ' KB)…';
+        return fetch('https://api.jsonbin.io/v3/b/' + JSONBIN_BIN_ID, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Master-Key': JSONBIN_API_KEY
+          },
+          body: JSON.stringify(envelope)
+        });
+      }).then(function(r) { return r.json(); })
       .then(function(r) { return r.json(); })
       .then(function(resp) {
-        if (resp.record || resp.pp) {
+        if (resp.record || resp.z) {
           document.getElementById('adminUploadStatus').innerHTML =
             '<div style="color:#10b981;font-weight:600;margin-bottom:8px">✓ Shared roster saved to JSONBin — ' + people.length + ' people, ' + Object.keys(pnames).length + ' projects</div>' +
             '<div style="color:#64748b;font-size:11px;margin-bottom:12px">All users will see this roster next time they open the app.</div>' +
