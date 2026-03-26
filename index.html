@@ -737,11 +737,8 @@ function handleAdminUpload(file) {
   if (!file) return;
   if (!JSONBIN_BIN_ID || !JSONBIN_API_KEY) {
     document.getElementById('adminUploadStatus').textContent =
-      '⚠ JSONBin not configured — see setup instructions. File will load locally only.';
+      '⚠ JSONBin not configured.';
     document.getElementById('adminUploadStatus').style.color = '#f59e0b';
-    // Still load locally
-    document.getElementById('fileInput').files = document.getElementById('adminFileInput').files;
-    document.getElementById('fileInput').dispatchEvent(new Event('change'));
     return;
   }
 
