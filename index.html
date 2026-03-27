@@ -2135,14 +2135,17 @@ function SO_getS(si,date,project,sm){
     var seen=new Set();
     SO_S.sharedPeople.forEach(function(p){
       if(p.project!==project)return;
+      // Apply roster type filter (con / mnt / both)
+      if(SO_S.rt==='con' && p.sheetType!=='con')return;
+      if(SO_S.rt==='mnt' && p.sheetType!=='mnt')return;
       var val=p.days[isoDate];
       if(!val)return;
       var s=String(val).trim();
       var num=parseInt(s,10);
-      if(isNaN(num)||num<1||num>50)return; // only show people actually working that day
+      if(isNaN(num)||num<1||num>50)return;
       if(sm==='exclude'&&SO_isS(p.role))return;
       if(sm==='only'&&!SO_isS(p.role))return;
-      var key=p.name.toLowerCase();
+      var key=p.name.toLowerCase()+'||'+p.sheetType;
       if(seen.has(key))return;
       seen.add(key);
       var parts=p.name.split(' ');
@@ -2397,7 +2400,7 @@ function SO_render(){
     el.innerHTML=`<div class="cd"><div class="ct">Select Projects</div><div class="cs">${SO_S.pL.length} projects in ${SO_S.fn} — select one or more</div><div class="fx fw g8" id="so_pBtns">${SO_S.pL.map(p=>`<button class="pb${SO_S.proj.includes(p.code)?" pba":""}" data-p="${p.code}" onclick="SO_togProj('${p.code}')">${p.code}<span>(${p.rosters})</span></button>`).join("")}</div><div style="height:20px"></div><button class="btn bp" id="so_pCont" onclick="if(SO_S.proj.length){SO_S.step=2;SO_render();}else{SO_sErr('Select at least one project.');}" ${SO_S.proj.length?"":"disabled"}>Continue with ${SO_S.proj.length||0} project${SO_S.proj.length!==1?"s":""} →</button></div>`;
   }else if(SO_S.step===2){
     el.innerHTML=`<div class="cd"><div class="ct">Options</div><div class="cs">Projects: ${SO_S.proj.join(", ")}</div><div class="lb">Roster</div><div class="rg" id="so_rR"></div><div style="height:16px"></div><div class="lb">Subcontractors</div><div class="rg" id="so_rS"></div><div style="height:16px"></div><div class="lb">Output Format</div><div class="rg" id="so_rF"></div><div style="height:20px"></div><button class="btn bp" onclick="SO_S.step=3;SO_render()">Continue →</button></div>`;
-    SO_rRG("so_rR",SO_S.rt,[["con","Construction / Production"],["mnt","Maintenance"],["both","Both Combined"]],v=>{SO_S.rt=v;SO_render();});
+    SO_rRG("so_rR",SO_S.rt,[["con","Construction / Production"],["mnt","Maintenance"],["both","Both Combined"]],v=>{SO_S.rt=v;if(SO_S.useShared)SO_rebuildProjList();SO_render();});
     SO_rRG("so_rS",SO_S.sm,[["include","Include All"],["exclude","Exclude Subs"],["only","Subs Only"]],v=>{SO_S.sm=v;SO_render();});
     SO_rRG("so_rF",SO_S.fmt,[["pdf","PDF"],["xlsx","Excel (.xlsx)"],["docx","Word (.docx)"],["html","Print / HTML"]],v=>{SO_S.fmt=v;SO_render();});
   }else if(SO_S.step===3){
@@ -2787,26 +2790,30 @@ ${body}</body></html>`;
 // ── Sign-on roster source helpers ─────────────────────────────────
 
 function SO_useSharedRoster(){
-  // Build sign-on sheet data from the already-parsed allPeople array
-  // Group people by project, build project list
   if(!allPeople||!allPeople.length){SO_sErr('No shared roster available.');return;}
-  var proj={},sheets={};
-  // Build a synthetic sheets structure from allPeople
-  // SO_getS needs sheets[sheetName].data etc — instead we'll override SO_S directly
+  SO_S.sharedPeople=allPeople;
+  SO_S.useShared=true;
+  SO_S.fn='Shared roster';
+  SO_rebuildProjList();
+  SO_S.step=1;
+  SO_render();
+}
+
+function SO_rebuildProjList(){
+  // Build project list filtered by current SO_S.rt (con/mnt/both)
   var projMap={};
-  allPeople.forEach(function(p){
+  (SO_S.sharedPeople||[]).forEach(function(p){
+    if(SO_S.rt==='con' && p.sheetType!=='con') return;
+    if(SO_S.rt==='mnt' && p.sheetType!=='mnt') return;
     if(!projMap[p.project]) projMap[p.project]=new Set();
     projMap[p.project].add(p.sheetType==='con'?'Con':'Mnt');
   });
   SO_S.pL=Object.keys(projMap).sort().map(function(code){
     return{code:code,rosters:[...projMap[code]].sort().join(' + ')};
   });
-  // Store allPeople reference for date-based lookups
-  SO_S.sharedPeople=allPeople;
-  SO_S.useShared=true;
-  SO_S.fn='Shared roster';
-  SO_S.step=1;
-  SO_render();
+  // Clear any selected projects that no longer exist in filtered list
+  var validCodes=new Set(SO_S.pL.map(function(p){return p.code;}));
+  SO_S.proj=SO_S.proj.filter(function(c){return validCodes.has(c);});
 }
 
 function SO_showUpload(){
