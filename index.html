@@ -718,7 +718,7 @@ function loadFromParsedData(data) {
   allPeople = pp.map(function(p) {
     return {
       project: p.p, name: p.n, role: normaliseRole(p.r),
-      area: p.a || '', sheetType: p.s || 'mnt', days: p.d || {}
+      area: p.a || '', phone: p.ph || '', sheetType: p.s || 'mnt', days: p.d || {}
     };
   });
   projectNames = data.pn || {};
@@ -830,7 +830,7 @@ function handleAdminUpload(file) {
         t: new Date().toISOString(),
         pn: pnames,
         pp: people.map(function(p) {
-          return { p: p.project, n: p.name, r: p.role, a: p.area || '', s: p.sheetType || 'mnt', d: p.days };
+          return { p: p.project, n: p.name, r: p.role, a: p.area || '', s: p.sheetType || 'mnt', ph: p.phone || '', d: p.days };
         })
       };
 
@@ -954,7 +954,9 @@ function parseSheet(ws, sheetType) {
     people.push({
       project: proj, name: [first, last].filter(Boolean).join(' '),
       role: normaliseRole(String(row[ci.role] || '').trim()),
-      area: String(row[ci.area] || '').trim(), days: days, sheetType: sheetType
+      area: String(row[ci.area] || '').trim(),
+      phone: String(row[10] || '').trim().replace(/ /g, ''),
+      days: days, sheetType: sheetType
     });
   }
   return people;
@@ -1694,15 +1696,32 @@ function buildFatigue() {
 
   var people = Object.values(merged);
 
-  // All dates across the entire roster span for this project
-  var allDates = [];
-  var dateSet = new Set();
-  people.forEach(function(p) { Object.keys(p.days).forEach(function(d) { if (!dateSet.has(d)) { dateSet.add(d); allDates.push(d); } }); });
-  allDates.sort();
-
   // Date range filter for reporting
   var rFrom = document.getElementById('dateFrom').value;
   var rTo   = document.getElementById('dateTo').value;
+
+  // Scan dates within range + 60 day buffer before start (to detect runs that started earlier)
+  // This prevents scanning the entire multi-year roster which locks the browser
+  var scanFrom = '';
+  var scanTo = rTo;
+  if (rFrom) {
+    var d = new Date(rFrom);
+    d.setDate(d.getDate() - 60); // buffer to catch runs starting before the from date
+    scanFrom = d.toISOString().slice(0, 10);
+  }
+
+  var allDates = [];
+  var dateSet = new Set();
+  people.forEach(function(p) {
+    Object.keys(p.days).forEach(function(d) {
+      if (dateSet.has(d)) return;
+      if (scanFrom && d < scanFrom) return; // skip dates too far before range
+      if (scanTo && d > scanTo) return;     // skip dates after range end
+      dateSet.add(d);
+      allDates.push(d);
+    });
+  });
+  allDates.sort();
 
   // Classify a day value for fatigue purposes
   var FLY_OUT = /fly[\s\-]*(out)|dri[\s\-]*(out)|drive[\s\-]*(out)|dve[\s\-]*(out)/i;
@@ -2032,7 +2051,8 @@ function launchSignOn() {
         SO_S.sheets = parsed.sheets;
         SO_S.fn = 'loaded roster';
         SO_S.pL = parsed.pL;
-        SO_S.step = 1; // skip upload screen, go straight to project selection
+        SO_S.useShared = false;
+        SO_S.step = 1;
         SO_S.proj = [];
         SO_render();
         return;
@@ -2041,7 +2061,8 @@ function launchSignOn() {
       SO_sErr('Could not read roster: ' + e.message);
     }
   }
-  // Fallback: show upload screen if no workbook loaded
+  // No raw workbook — show three-button roster source screen (step 0)
+  // The shared roster button will be active if allPeople is populated from JSONBin
   SO_S.step = 0;
   SO_render();
 }
@@ -2120,7 +2141,7 @@ function SO_getS(si,date,project,sm){
       var parts=p.name.split(' ');
       var fn=parts[0]||'';
       var sn=parts.slice(1).join(' ')||'';
-      staff.push({sn:SO_fxC(sn),fn:SO_fxC(fn),ph:'',rl:SO_fxC(p.role)});
+      staff.push({sn:SO_fxC(sn),fn:SO_fxC(fn),ph:p.phone||'',rl:SO_fxC(p.role)});
     });
     return staff;
   }
@@ -2880,7 +2901,7 @@ async function SO_doGen(){
 function SO_rKeep(){SO_S.step=1;SO_S.proj=[];SO_S.rt="both";SO_S.sm="include";SO_S.fmt="pdf";SO_S.single=true;SO_S.pmO="";SO_S.saO="";SO_S.pv=null;SO_S.res=null;SO_render();}
 function SO_resetAll(){
   SO_S={step:0,sheets:null,fn:"",pL:[],proj:[],rt:"both",sm:"include",fmt:"pdf",sd:SO_fD(new Date()),ed:SO_fD(new Date()),single:true,pmO:"",saO:"",pv:null,res:null};
-  // If roster already loaded, skip upload screen
+  // If raw workbook available, parse it; else show three-button screen
   if (loadedWorkbook) {
     try {
       var parsed = SO_parseR(loadedWorkbook);
@@ -2888,9 +2909,13 @@ function SO_resetAll(){
         SO_S.sheets = parsed.sheets;
         SO_S.fn = 'loaded roster';
         SO_S.pL = parsed.pL;
+        SO_S.useShared = false;
         SO_S.step = 1;
       }
     } catch(e) {}
+  } else {
+    // Step 0 shows the three-button screen
+    SO_S.step = 0;
   }
   SO_render();
 }
