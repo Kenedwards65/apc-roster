@@ -388,7 +388,7 @@ tr:hover td{background:#0f172a}
           <div style="font-size:12px;color:#475569;margin-top:2px">Roster loaded — generate printable daily sign-on sheets</div>
         </div>
         <div style="display:flex;gap:8px">
-          <button id="so_soBtn" class="back-btn" style="display:none;border-color:#10b981;color:#10b981" onclick="SO_resetAll()">Start over</button>
+          <button id="so_soBtn" class="back-btn" style="display:none;border-color:#10b981;color:#10b981" onclick="SO_resetAll()">↺ New project</button>
           <button class="back-btn" onclick="closeSignOn()">← Back</button>
         </div>
       </div>
@@ -2045,6 +2045,7 @@ function launchSignOn() {
   SO_S.ed = SO_fD(new Date());
 
   if (loadedWorkbook) {
+    // Raw workbook available — parse and go straight to project selection
     try {
       var parsed = SO_parseR(loadedWorkbook);
       if (parsed.pL.length) {
@@ -2061,8 +2062,14 @@ function launchSignOn() {
       SO_sErr('Could not read roster: ' + e.message);
     }
   }
-  // No raw workbook — show three-button roster source screen (step 0)
-  // The shared roster button will be active if allPeople is populated from JSONBin
+
+  if (allPeople && allPeople.length > 0) {
+    // Shared roster loaded from JSONBin — go straight to project selection
+    SO_useSharedRoster();
+    return;
+  }
+
+  // Nothing loaded yet — show roster source selection screen
   SO_S.step = 0;
   SO_render();
 }
@@ -2310,7 +2317,7 @@ function SO_mkPDF(project,date,pm,safety,staff,existingDoc){
 }
 
 function SO_sErr(m){const e=document.getElementById("so_eBox");e.textContent=m;e.style.display=m?"block":"none";}
-function SO_rSteps(){const lb=["Project","Options","Dates","Generate"];let h="";lb.forEach((t,i)=>{const active=i===SO_S.step-1,done=i<SO_S.step-1;h+=`<div class="step ${active?'active':done?'done':''}"><span class="step-num">${i+1}</span>${t}</div>`;});document.getElementById("so_sBar").innerHTML=h;document.getElementById("so_soBtn").style.display=SO_S.step>0?"block":"none";}
+function SO_rSteps(){const lb=["Project","Options","Dates","Generate"];let h="";lb.forEach((t,i)=>{const active=i===SO_S.step-1,done=i<SO_S.step-1;h+=`<div class="step ${active?'active':done?'done':''}"><span class="step-num">${i+1}</span>${t}</div>`;});document.getElementById("so_sBar").innerHTML=h;document.getElementById("so_soBtn").style.display=SO_S.step>1?"block":"none";}
 
 function SO_render(){
   SO_rSteps();SO_sErr("");const el=document.getElementById("so_cnt");
@@ -2901,7 +2908,6 @@ async function SO_doGen(){
 function SO_rKeep(){SO_S.step=1;SO_S.proj=[];SO_S.rt="both";SO_S.sm="include";SO_S.fmt="pdf";SO_S.single=true;SO_S.pmO="";SO_S.saO="";SO_S.pv=null;SO_S.res=null;SO_render();}
 function SO_resetAll(){
   SO_S={step:0,sheets:null,fn:"",pL:[],proj:[],rt:"both",sm:"include",fmt:"pdf",sd:SO_fD(new Date()),ed:SO_fD(new Date()),single:true,pmO:"",saO:"",pv:null,res:null};
-  // If raw workbook available, parse it; else show three-button screen
   if (loadedWorkbook) {
     try {
       var parsed = SO_parseR(loadedWorkbook);
@@ -2911,12 +2917,17 @@ function SO_resetAll(){
         SO_S.pL = parsed.pL;
         SO_S.useShared = false;
         SO_S.step = 1;
+        SO_render();
+        return;
       }
     } catch(e) {}
-  } else {
-    // Step 0 shows the three-button screen
-    SO_S.step = 0;
   }
+  if (allPeople && allPeople.length > 0) {
+    SO_useSharedRoster();
+    return;
+  }
+  // Nothing loaded — show roster source screen
+  SO_S.step = 0;
   SO_render();
 }
 // Sign-on init handled by launchSignOn()
