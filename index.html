@@ -2114,7 +2114,7 @@ function SO_buildZip(files){
 
 const SO_SK=["dra tanks","fleurieu fire","fleurieu","fencewright","outback trees","dream courts","all seasons turf","mobe crete","crane corp","pilbara networks","wormald","pca comms","hedland harbour","radlink","nwmc","elite compliance","fuel -"];
 const SO_RC={"Con Roster 20251201":{dsc:16,rc:12,lb:"Con"},"Mnt Roster20251210":{dsc:13,rc:11,lb:"Mnt"}};
-let SO_S={step:0,sheets:null,fn:"",pL:[],proj:[],rt:"both",sm:"include",fmt:"pdf",sd:"",ed:"",single:true,pmO:"",saO:"",pv:null,res:null,incFlyInAM:false,incFlyOutPM:false,incF2F:false};
+let SO_S={step:0,sheets:null,fn:"",pL:[],proj:[],rt:"both",sm:"include",fmt:"pdf",sd:"",ed:"",single:true,pmO:"",saO:"",pv:null,res:null,incFlyInAM:false,incFlyOutPM:false,incF2F:false,incFlyIn:false,incFlyOut:false,incDriIn:false,incDriOut:false};
 const SO_isS=r=>SO_SK.some(k=>(r||"").toLowerCase().includes(k));
 const SO_fxC=s=>s===s.toUpperCase()&&s.length>2?s[0]+s.slice(1).toLowerCase():s;
 const SO_fD=d=>`${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
@@ -2146,10 +2146,17 @@ function SO_getS(si,date,project,sm){
       var num=parseInt(s,10);
       var isWorkDay=(!isNaN(num)&&num>=1&&num<=50);
       // Check travel day inclusions
-      var isFlyInAM = SO_S.incFlyInAM && /fly\s*in\s*am|dri\s*in\s*am/i.test(s);
+      // Travel day inclusions — check specific patterns first (AM/PM), then general
+      var isFlyInAM  = SO_S.incFlyInAM  && /fly\s*in\s*am|dri\s*in\s*am/i.test(s);
       var isFlyOutPM = SO_S.incFlyOutPM && /fly\s*out\s*pm|dri\s*out\s*pm/i.test(s);
-      var isF2F = SO_S.incF2F && /^f2f$/i.test(s);
-      if(!isWorkDay && !isFlyInAM && !isFlyOutPM && !isF2F)return;
+      var isF2F      = SO_S.incF2F      && /^f2f$/i.test(s);
+      // Standard fly in/out — match only if NOT already an AM/PM variant
+      var isFlyIn    = SO_S.incFlyIn    && /^(fly|dri(ve)?)\s*in(\s|$)/i.test(s) && !/am|pm/i.test(s);
+      var isFlyOut   = SO_S.incFlyOut   && /^(fly|dri(ve)?)\s*out(\s|$)/i.test(s) && !/am|pm/i.test(s);
+      // Dri In / Dri Out specific (drive variants, no AM/PM)
+      var isDriIn    = SO_S.incDriIn    && /^dri(ve)?\s*in(\s|$)/i.test(s) && !/am|pm/i.test(s);
+      var isDriOut   = SO_S.incDriOut   && /^dri(ve)?\s*out(\s|$)/i.test(s) && !/am|pm/i.test(s);
+      if(!isWorkDay && !isFlyInAM && !isFlyOutPM && !isF2F && !isFlyIn && !isFlyOut && !isDriIn && !isDriOut)return;
       if(sm==='exclude'&&SO_isS(p.role))return;
       if(sm==='only'&&!SO_isS(p.role))return;
       var key=p.name.toLowerCase()+'||'+p.sheetType;
@@ -2167,10 +2174,14 @@ function SO_getS(si,date,project,sm){
   for(let r=3;r<data.length;r++){const row=data[r]||[];if(String(row[3]||"").trim().replace(/\u00a0/g,"")!==project)continue;const ln=String(row[8]||"").trim().replace(/\u00a0/g,""),fn=String(row[9]||"").trim().replace(/\u00a0/g,"");if(!ln||!fn)continue;if(/^total/i.test(ln))continue;const ph=String(row[10]||"").trim().replace(/\u00a0/g,""),rl=String(row[cfg.rc]||"").trim().replace(/\u00a0/g,"");if(sm==="exclude"&&SO_isS(rl))continue;if(sm==="only"&&!SO_isS(rl))continue;const rv=row[tc],dv=String(rv==null?"":rv).trim().replace(/\u00a0/g,"");
     const num=parseInt(dv,10);
     const isWorkDay=!isNaN(num)&&num>=1&&num<=50;
-    const isFlyInAM=SO_S.incFlyInAM&&/fly\s*in\s*am|dri\s*in\s*am/i.test(dv);
-    const isFlyOutPM=SO_S.incFlyOutPM&&/fly\s*out\s*pm|dri\s*out\s*pm/i.test(dv);
-    const isF2F=SO_S.incF2F&&/^f2f$/i.test(dv);
-    if(isWorkDay||isFlyInAM||isFlyOutPM||isF2F)rawStaff.push({sn:SO_fxC(ln),fn:SO_fxC(fn),ph,rl:SO_fxC(rl)});}
+    const isFlyInAM  = SO_S.incFlyInAM  && /fly\s*in\s*am|dri\s*in\s*am/i.test(dv);
+    const isFlyOutPM = SO_S.incFlyOutPM && /fly\s*out\s*pm|dri\s*out\s*pm/i.test(dv);
+    const isF2F      = SO_S.incF2F      && /^f2f$/i.test(dv);
+    const isFlyIn    = SO_S.incFlyIn    && /^(fly|dri(ve)?)\s*in(\s|$)/i.test(dv) && !/am|pm/i.test(dv);
+    const isFlyOut   = SO_S.incFlyOut   && /^(fly|dri(ve)?)\s*out(\s|$)/i.test(dv) && !/am|pm/i.test(dv);
+    const isDriIn    = SO_S.incDriIn    && /^dri(ve)?\s*in(\s|$)/i.test(dv) && !/am|pm/i.test(dv);
+    const isDriOut   = SO_S.incDriOut   && /^dri(ve)?\s*out(\s|$)/i.test(dv) && !/am|pm/i.test(dv);
+    if(isWorkDay||isFlyInAM||isFlyOutPM||isF2F||isFlyIn||isFlyOut||isDriIn||isDriOut)rawStaff.push({sn:SO_fxC(ln),fn:SO_fxC(fn),ph,rl:SO_fxC(rl)});}
   return rawStaff;
 }
 
@@ -2410,7 +2421,7 @@ function SO_render(){
   }else if(SO_S.step===1){
     el.innerHTML=`<div class="cd"><div class="ct">Select Projects</div><div class="cs">${SO_S.pL.length} projects in ${SO_S.fn} — select one or more</div><div class="fx fw g8" id="so_pBtns">${SO_S.pL.map(p=>`<button class="pb${SO_S.proj.includes(p.code)?" pba":""}" data-p="${p.code}" onclick="SO_togProj('${p.code}')">${p.code}<span>(${p.rosters})</span></button>`).join("")}</div><div style="height:20px"></div><button class="btn bp" id="so_pCont" onclick="if(SO_S.proj.length){SO_S.step=2;SO_render();}else{SO_sErr('Select at least one project.');}" ${SO_S.proj.length?"":"disabled"}>Continue with ${SO_S.proj.length||0} project${SO_S.proj.length!==1?"s":""} →</button></div>`;
   }else if(SO_S.step===2){
-    el.innerHTML=`<div class="cd"><div class="ct">Options</div><div class="cs">Projects: ${SO_S.proj.join(", ")}</div><div class="lb">Roster</div><div class="rg" id="so_rR"></div><div style="height:16px"></div><div class="lb">Subcontractors</div><div class="rg" id="so_rS"></div><div style="height:16px"></div><div class="lb">Output Format</div><div class="rg" id="so_rF"></div><div style="height:16px"></div><div class="lb">Include travel days on sign-on sheet</div><div style="font-size:11px;color:#64748b;margin-bottom:8px">Off by default — tick any that apply for this project</div><div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"><label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:#f1f5f9"><input type="checkbox" id="so_cbFlyInAM" ${SO_S.incFlyInAM?'checked':''} onchange="SO_S.incFlyInAM=this.checked" style="width:16px;height:16px;accent-color:#10b981"> Fly In AM &nbsp;<span style="color:#64748b;font-size:11px">— person arrives before lunch and works that day</span></label><label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:#f1f5f9"><input type="checkbox" id="so_cbFlyOutPM" ${SO_S.incFlyOutPM?'checked':''} onchange="SO_S.incFlyOutPM=this.checked" style="width:16px;height:16px;accent-color:#10b981"> Fly Out PM &nbsp;<span style="color:#64748b;font-size:11px">— person works the morning then flies out in the afternoon</span></label><label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:#f1f5f9"><input type="checkbox" id="so_cbF2F" ${SO_S.incF2F?'checked':''} onchange="SO_S.incF2F=this.checked" style="width:16px;height:16px;accent-color:#10b981"> F2F (Fly to Fly) &nbsp;<span style="color:#64748b;font-size:11px">— person flies in and out on the same day</span></label></div><button class="btn bp" onclick="SO_S.step=3;SO_render()">Continue →</button></div>`;
+    el.innerHTML=`<div class="cd"><div class="ct">Options</div><div class="cs">Projects: ${SO_S.proj.join(", ")}</div><div class="lb">Roster</div><div class="rg" id="so_rR"></div><div style="height:16px"></div><div class="lb">Subcontractors</div><div class="rg" id="so_rS"></div><div style="height:16px"></div><div class="lb">Output Format</div><div class="rg" id="so_rF"></div><div style="height:16px"></div><div class="lb">Include travel days on sign-on sheet</div><div style="font-size:11px;color:#64748b;margin-bottom:8px">Off by default — tick any that apply for this project</div><div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"><label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:#f1f5f9"><input type="checkbox" id="so_cbFlyIn" ${SO_S.incFlyIn?'checked':''} onchange="SO_S.incFlyIn=this.checked" style="width:16px;height:16px;accent-color:#10b981"> Fly In &nbsp;<span style="color:#64748b;font-size:11px">— person flies in (nearby camps, may work that day)</span></label><label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:#f1f5f9"><input type="checkbox" id="so_cbFlyInAM" ${SO_S.incFlyInAM?'checked':''} onchange="SO_S.incFlyInAM=this.checked" style="width:16px;height:16px;accent-color:#10b981"> Fly In AM &nbsp;<span style="color:#64748b;font-size:11px">— person arrives before lunch and works that day</span></label><label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:#f1f5f9"><input type="checkbox" id="so_cbFlyOut" ${SO_S.incFlyOut?'checked':''} onchange="SO_S.incFlyOut=this.checked" style="width:16px;height:16px;accent-color:#10b981"> Fly Out &nbsp;<span style="color:#64748b;font-size:11px">— person flies out (nearby camps, may have worked that day)</span></label><label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:#f1f5f9"><input type="checkbox" id="so_cbFlyOutPM" ${SO_S.incFlyOutPM?'checked':''} onchange="SO_S.incFlyOutPM=this.checked" style="width:16px;height:16px;accent-color:#10b981"> Fly Out PM &nbsp;<span style="color:#64748b;font-size:11px">— person works the morning then flies out in the afternoon</span></label><label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:#f1f5f9"><input type="checkbox" id="so_cbDriIn" ${SO_S.incDriIn?'checked':''} onchange="SO_S.incDriIn=this.checked" style="width:16px;height:16px;accent-color:#10b981"> Dri In &nbsp;<span style="color:#64748b;font-size:11px">— person drives in to site</span></label><label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:#f1f5f9"><input type="checkbox" id="so_cbDriOut" ${SO_S.incDriOut?'checked':''} onchange="SO_S.incDriOut=this.checked" style="width:16px;height:16px;accent-color:#10b981"> Dri Out &nbsp;<span style="color:#64748b;font-size:11px">— person drives out from site</span></label><label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:#f1f5f9"><input type="checkbox" id="so_cbF2F" ${SO_S.incF2F?'checked':''} onchange="SO_S.incF2F=this.checked" style="width:16px;height:16px;accent-color:#10b981"> F2F (Face to Face) &nbsp;<span style="color:#64748b;font-size:11px">— face to face meeting on site</span></label></div><button class="btn bp" onclick="SO_S.step=3;SO_render()">Continue →</button></div>`;
     SO_rRG("so_rR",SO_S.rt,[["con","Construction / Production"],["mnt","Maintenance"],["both","Both Combined"]],v=>{SO_S.rt=v;if(SO_S.useShared)SO_rebuildProjList();SO_render();});
     SO_rRG("so_rS",SO_S.sm,[["include","Include All"],["exclude","Exclude Subs"],["only","Subs Only"]],v=>{SO_S.sm=v;SO_render();});
     SO_rRG("so_rF",SO_S.fmt,[["pdf","PDF"],["xlsx","Excel (.xlsx)"],["docx","Word (.docx)"],["html","Print / HTML"]],v=>{SO_S.fmt=v;SO_render();});
