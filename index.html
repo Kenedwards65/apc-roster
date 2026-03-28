@@ -2135,6 +2135,8 @@ function SO_getS(si,date,project,sm){
     var seen=new Set();
     SO_S.sharedPeople.forEach(function(p){
       if(p.project!==project)return;
+      // Exclude summary/total rows — these are not people
+      if(/^total/i.test(p.name))return;
       // Apply roster type filter (con / mnt / both)
       if(SO_S.rt==='con' && p.sheetType!=='con')return;
       if(SO_S.rt==='mnt' && p.sheetType!=='mnt')return;
@@ -2157,7 +2159,7 @@ function SO_getS(si,date,project,sm){
   }
   // Standard path — use raw sheet data
   const{data,cfg,dm}=si,tc=dm[`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`];if(tc===undefined)return[];var rawStaff=[];
-  for(let r=3;r<data.length;r++){const row=data[r]||[];if(String(row[3]||"").trim().replace(/\u00a0/g,"")!==project)continue;const ln=String(row[8]||"").trim().replace(/\u00a0/g,""),fn=String(row[9]||"").trim().replace(/\u00a0/g,"");if(!ln||!fn)continue;const ph=String(row[10]||"").trim().replace(/\u00a0/g,""),rl=String(row[cfg.rc]||"").trim().replace(/\u00a0/g,"");if(sm==="exclude"&&SO_isS(rl))continue;if(sm==="only"&&!SO_isS(rl))continue;const rv=row[tc],dv=String(rv==null?"":rv).trim().replace(/\u00a0/g,"");
+  for(let r=3;r<data.length;r++){const row=data[r]||[];if(String(row[3]||"").trim().replace(/\u00a0/g,"")!==project)continue;const ln=String(row[8]||"").trim().replace(/\u00a0/g,""),fn=String(row[9]||"").trim().replace(/\u00a0/g,"");if(!ln||!fn)continue;if(/^total/i.test(ln))continue;const ph=String(row[10]||"").trim().replace(/\u00a0/g,""),rl=String(row[cfg.rc]||"").trim().replace(/\u00a0/g,"");if(sm==="exclude"&&SO_isS(rl))continue;if(sm==="only"&&!SO_isS(rl))continue;const rv=row[tc],dv=String(rv==null?"":rv).trim().replace(/\u00a0/g,"");
     const num=parseInt(dv,10);
     if(!isNaN(num)&&num>=1&&num<=50)rawStaff.push({sn:SO_fxC(ln),fn:SO_fxC(fn),ph,rl:SO_fxC(rl)});}
   return rawStaff;
@@ -2803,6 +2805,7 @@ function SO_rebuildProjList(){
   // Build project list filtered by current SO_S.rt (con/mnt/both)
   var projMap={};
   (SO_S.sharedPeople||[]).forEach(function(p){
+    if(/^total/i.test(p.name)) return;
     if(SO_S.rt==='con' && p.sheetType!=='con') return;
     if(SO_S.rt==='mnt' && p.sheetType!=='mnt') return;
     if(!projMap[p.project]) projMap[p.project]=new Set();
